@@ -198,6 +198,12 @@ export default function AppNavigator() {
   const [isLocked, setIsLocked] = useState(false);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
   const appState = useRef(AppState.currentState);
+  const lastUnlockTime = useRef(0);
+
+  const handleUnlock = () => {
+    lastUnlockTime.current = Date.now();
+    setIsLocked(false);
+  };
 
   useEffect(() => {
     // Check on launch
@@ -206,13 +212,13 @@ export default function AppNavigator() {
     }
     setInitialCheckDone(true);
 
-    // Re-lock when app comes to foreground
+    // Re-lock only when app returns from true background (not Face ID prompt)
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === 'active' &&
-        isBiometricsEnabled()
-      ) {
+      const wasBackground = appState.current === 'background';
+      const isNowActive = nextAppState === 'active';
+      const cooldownPassed = Date.now() - lastUnlockTime.current > 3000;
+
+      if (wasBackground && isNowActive && isBiometricsEnabled() && cooldownPassed) {
         setIsLocked(true);
       }
       appState.current = nextAppState;
@@ -224,7 +230,7 @@ export default function AppNavigator() {
   if (!initialCheckDone) return null;
 
   if (isLocked) {
-    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+    return <LockScreen onUnlock={handleUnlock} />;
   }
 
   return (
