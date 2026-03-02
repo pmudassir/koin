@@ -5,11 +5,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  PanResponder,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Transaction, CATEGORY_COLORS, Category } from '../models/Transaction';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../theme';
+import { getCustomCategories } from '../storage/categoryStorage';
 
 const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   Food: 'restaurant',
@@ -23,7 +24,25 @@ const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   Others: 'more-horiz',
 };
 
-const SWIPE_THRESHOLD = 80;
+function getCategoryIcon(category: string): keyof typeof MaterialIcons.glyphMap {
+  if (ICON_MAP[category]) return ICON_MAP[category];
+  const custom = getCustomCategories().find(
+    (c) => c.name.toLowerCase() === category.toLowerCase()
+  );
+  if (custom) return custom.icon as keyof typeof MaterialIcons.glyphMap;
+  return 'more-horiz';
+}
+
+function getCategoryColor(category: string): { bg: string; text: string } {
+  if (CATEGORY_COLORS[category as Category]) {
+    return CATEGORY_COLORS[category as Category];
+  }
+  const custom = getCustomCategories().find(
+    (c) => c.name.toLowerCase() === category.toLowerCase()
+  );
+  if (custom) return { bg: `${custom.color}30`, text: custom.color };
+  return CATEGORY_COLORS.Others;
+}
 
 interface Props {
   transaction: Transaction;
@@ -33,77 +52,9 @@ interface Props {
 }
 
 export default function TransactionItem({ transaction, onPress, onEdit, onDelete }: Props) {
-  const categoryColor = CATEGORY_COLORS[transaction.category as Category] || CATEGORY_COLORS.Others;
-  const iconName = ICON_MAP[transaction.category] || 'more-horiz';
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isAnimating = useRef(false);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 20;
-      },
-      onPanResponderGrant: () => {},
-      onPanResponderMove: (_, gestureState) => {
-        if (isAnimating.current) return;
-        // Clamp between -120 and 120
-        const dx = Math.max(-120, Math.min(120, gestureState.dx));
-        translateX.setValue(dx);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (isAnimating.current) return;
-        isAnimating.current = true;
-
-        if (gestureState.dx < -SWIPE_THRESHOLD && onDelete) {
-          // Swipe left → Delete
-          Animated.spring(translateX, {
-            toValue: -120,
-            useNativeDriver: true,
-            friction: 8,
-          }).start(() => {
-            isAnimating.current = false;
-          });
-          setTimeout(() => {
-            onDelete();
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              friction: 8,
-            }).start(() => {
-              isAnimating.current = false;
-            });
-          }, 300);
-        } else if (gestureState.dx > SWIPE_THRESHOLD && onEdit) {
-          // Swipe right → Edit
-          Animated.spring(translateX, {
-            toValue: 120,
-            useNativeDriver: true,
-            friction: 8,
-          }).start(() => {
-            isAnimating.current = false;
-          });
-          setTimeout(() => {
-            onEdit();
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: true,
-              friction: 8,
-            }).start(() => {
-              isAnimating.current = false;
-            });
-          }, 300);
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-          }).start(() => {
-            isAnimating.current = false;
-          });
-        }
-      },
-    })
-  ).current;
+  const categoryColor = getCategoryColor(transaction.category);
+  const iconName = getCategoryIcon(transaction.category);
+  const swipeableRef = useRef<Swipeable>(null);
 
   const formatTime = (ts: number) => {
     const date = new Date(ts);
@@ -124,111 +75,133 @@ export default function TransactionItem({ transaction, onPress, onEdit, onDelete
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
-  // Background actions opacity
-  const editOpacity = translateX.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const renderRightActions = (
+    progress: Animated.AnimatedInterpolation<number>,
+  ) => {
+    const scale = progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.6, 1],
+      extrapolate: 'clamp',
+    });
 
-  const deleteOpacity = translateX.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => {
+          swipeableRef.current?.close();
+          onDelete?.();
+        }}
+        style={styles.actionRightWrapper}
+      >
+        <Animated.View style={[styles.actionRight, { transform: [{ scale }] }]}>
+          <MaterialIcons name="delete-outline" size={22} color={Colors.white} />
+          <Text style={styles.actionText}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderLeftActions = (
+    progress: Animated.AnimatedInterpolation<number>,
+  ) => {
+    const scale = progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.6, 1],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => {
+          swipeableRef.current?.close();
+          onEdit?.();
+        }}
+        style={styles.actionLeftWrapper}
+      >
+        <Animated.View style={[styles.actionLeft, { transform: [{ scale }] }]}>
+          <MaterialIcons name="edit" size={22} color={Colors.white} />
+          <Text style={styles.actionText}>Edit</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={styles.wrapper}>
-      {/* Edit action (left swipe reveal) */}
-      <Animated.View style={[styles.actionLeft, { opacity: editOpacity }]}>
-        <MaterialIcons name="edit" size={22} color={Colors.white} />
-        <Text style={styles.actionText}>Edit</Text>
-      </Animated.View>
-
-      {/* Delete action (right swipe reveal) */}
-      <Animated.View style={[styles.actionRight, { opacity: deleteOpacity }]}>
-        <Text style={styles.actionText}>Delete</Text>
-        <MaterialIcons name="delete" size={22} color={Colors.white} />
-      </Animated.View>
-
-      {/* Main content */}
-      <Animated.View
-        style={[styles.container, { transform: [{ translateX }] }]}
-        {...panResponder.panHandlers}
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={onDelete ? renderRightActions : undefined}
+      renderLeftActions={onEdit ? renderLeftActions : undefined}
+      overshootRight={false}
+      overshootLeft={false}
+      friction={2}
+      rightThreshold={40}
+      leftThreshold={40}
+    >
+      <TouchableOpacity
+        style={styles.container}
+        activeOpacity={0.7}
+        onPress={onPress}
       >
-        <TouchableOpacity
-          style={styles.inner}
-          activeOpacity={0.7}
-          onPress={onPress}
-        >
-          <View style={[styles.iconCircle, { backgroundColor: categoryColor.bg }]}>
-            <MaterialIcons name={iconName} size={22} color={categoryColor.text} />
-          </View>
-          <View style={styles.info}>
-            <Text style={styles.merchant} numberOfLines={1}>
-              {transaction.merchant}
-            </Text>
-            <Text style={styles.subtitle}>
-              {transaction.category} • {formatTime(transaction.timestamp)}
-            </Text>
-          </View>
-          <Text style={styles.amount}>
-            -₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        <View style={[styles.iconCircle, { backgroundColor: categoryColor.bg }]}>
+          <MaterialIcons name={iconName} size={22} color={categoryColor.text} />
+        </View>
+        <View style={styles.info}>
+          <Text style={styles.merchant} numberOfLines={1}>
+            {transaction.merchant}
           </Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+          <Text style={styles.subtitle}>
+            {transaction.category} • {formatTime(transaction.timestamp)}
+          </Text>
+        </View>
+        <Text style={styles.amount}>
+          -₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        </Text>
+      </TouchableOpacity>
+    </Swipeable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    position: 'relative',
-    borderRadius: 16,
-    overflow: 'hidden',
+  actionLeftWrapper: {
+    width: 85,
+  },
+  actionRightWrapper: {
+    width: 85,
   },
   actionLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 120,
+    flex: 1,
     backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    alignItems: 'center',
     borderRadius: 16,
+    marginRight: 6,
+    gap: 4,
   },
   actionRight: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 120,
+    flex: 1,
     backgroundColor: '#ef4444',
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    alignItems: 'center',
     borderRadius: 16,
+    marginLeft: 6,
+    gap: 4,
   },
   actionText: {
     color: Colors.white,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   container: {
-    borderRadius: 16,
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
-  },
-  inner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(30, 41, 59, 0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 41, 59, 0.8)',
   },
   iconCircle: {
     width: 48,

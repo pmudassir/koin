@@ -23,6 +23,9 @@ import AddExpenseScreen from '../screens/AddExpenseScreen';
 import AllTransactionsScreen from '../screens/AllTransactionsScreen';
 import PendingScreen from '../screens/PendingScreen';
 
+import LoginScreen from '../screens/LoginScreen';
+import { getItem, setItem, STORAGE_KEYS } from '../storage/mmkv';
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -195,10 +198,18 @@ function TabNavigator() {
 
 // ─── Main Navigator ──────────────────────────────────
 export default function AppNavigator() {
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return getItem<boolean>(STORAGE_KEYS.HAS_ONBOARDED) === true;
+  });
   const [isLocked, setIsLocked] = useState(false);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
   const appState = useRef(AppState.currentState);
   const lastUnlockTime = useRef(0);
+
+  const handleLogin = () => {
+    setItem(STORAGE_KEYS.HAS_ONBOARDED, true);
+    setIsLoggedIn(true);
+  };
 
   const handleUnlock = () => {
     lastUnlockTime.current = Date.now();
@@ -206,13 +217,11 @@ export default function AppNavigator() {
   };
 
   useEffect(() => {
-    // Check on launch
-    if (isBiometricsEnabled()) {
+    if (isLoggedIn && isBiometricsEnabled()) {
       setIsLocked(true);
     }
     setInitialCheckDone(true);
 
-    // Re-lock only when app returns from true background (not Face ID prompt)
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const wasBackground = appState.current === 'background';
       const isNowActive = nextAppState === 'active';
@@ -225,10 +234,16 @@ export default function AppNavigator() {
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [isLoggedIn]);
 
   if (!initialCheckDone) return null;
 
+  // Show login screen if not onboarded
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  // Show lock screen if biometrics enabled
   if (isLocked) {
     return <LockScreen onUnlock={handleUnlock} />;
   }

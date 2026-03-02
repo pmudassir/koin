@@ -42,4 +42,5 @@ export const STORAGE_KEYS = {
   USER_ID: 'user_id',
   PENDING_SHARE: 'pending_share',
   BIOMETRICS_ENABLED: 'biometrics_enabled',
+  HAS_ONBOARDED: 'has_onboarded',
 } as const;
