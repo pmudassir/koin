@@ -6,8 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Image,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,19 +18,27 @@ import {
   getTransactionsForDay,
   getTodayTotal,
   getDailyBudget,
+  deleteTransaction,
+  getBudgetPeriod,
+  getPeriodTotal,
+  getWeeklyTotal,
+  getMonthlyTotal,
 } from '../storage/transactionStorage';
 import TransactionItem from '../components/TransactionItem';
 import BudgetCard from '../components/BudgetCard';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
-  const [todayTotal, setTodayTotal] = useState(0);
+  const [periodTotal, setPeriodTotal] = useState(0);
   const [budget, setBudget] = useState(2500);
+  const [budgetPeriod, setBudgetPeriodState] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(() => {
-    setTodayTotal(getTodayTotal());
+    const period = getBudgetPeriod();
+    setBudgetPeriodState(period);
+    setPeriodTotal(getPeriodTotal());
     setBudget(getDailyBudget());
     setRecentTransactions(getTransactionsForDay(new Date()).slice(0, 5));
   }, []);
@@ -47,6 +55,31 @@ export default function HomeScreen() {
     setTimeout(() => setRefreshing(false), 500);
   }, [loadData]);
 
+  const handleDelete = (txn: Transaction) => {
+    Alert.alert(
+      'Delete Transaction',
+      `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteTransaction(txn.id);
+            loadData();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEdit = (txn: Transaction) => {
+    navigation.navigate('AddExpense', { transaction: txn });
+  };
+
+  const periodLabel = budgetPeriod === 'daily' ? 'Today' : budgetPeriod === 'weekly' ? 'This Week' : 'This Month';
+  const budgetLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1) + ' Budget';
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.backgroundDark} />
@@ -59,7 +92,7 @@ export default function HomeScreen() {
             </View>
             <View>
               <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.dateText}>Today</Text>
+              <Text style={styles.dateText}>{periodLabel}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.notifButton}>
@@ -81,21 +114,21 @@ export default function HomeScreen() {
         >
           {/* Total Spent */}
           <View style={styles.totalSection}>
-            <Text style={styles.totalLabel}>Total Spent Today</Text>
+            <Text style={styles.totalLabel}>Total Spent {periodLabel}</Text>
             <Text style={styles.totalAmount}>
-              ₹{todayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{periodTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </Text>
           </View>
 
           {/* Budget Card */}
           <View style={styles.budgetSection}>
-            <BudgetCard budget={budget} spent={todayTotal} />
+            <BudgetCard budget={budget} spent={periodTotal} label={budgetLabel} />
           </View>
 
           {/* Recent Transactions */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('AllTransactions')}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -109,20 +142,18 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.txnList}>
               {recentTransactions.map((txn) => (
-                <TransactionItem key={txn.id} transaction={txn} />
+                <TransactionItem
+                  key={txn.id}
+                  transaction={txn}
+                  onEdit={() => handleEdit(txn)}
+                  onDelete={() => handleDelete(txn)}
+                />
               ))}
             </View>
           )}
         </ScrollView>
 
-        {/* FAB */}
-        <TouchableOpacity
-          style={styles.fab}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('AddExpense')}
-        >
-          <MaterialIcons name="add" size={28} color={Colors.white} />
-        </TouchableOpacity>
+        {/* FAB removed — using tab bar + button instead */}
       </SafeAreaView>
     </View>
   );
@@ -242,21 +273,5 @@ const styles = StyleSheet.create({
   emptySubtext: {
     color: Colors.slate500,
     fontSize: 13,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 100,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
   },
 });

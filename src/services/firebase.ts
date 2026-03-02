@@ -23,12 +23,12 @@ import {
 import { getItem, setItem, STORAGE_KEYS } from '../storage/mmkv';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBxvpWoLKYmpZM3PyBfAS968FZr1Y7aZv4',
-  authDomain: 'koin-finance-app.firebaseapp.com',
-  projectId: 'koin-finance-app',
-  storageBucket: 'koin-finance-app.firebasestorage.app',
-  messagingSenderId: '1068940728534',
-  appId: '1:1068940728534:web:729c2d235fed4470b89177',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBxvpWoLKYmpZM3PyBfAS968FZr1Y7aZv4',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'koin-finance-app.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'koin-finance-app',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'koin-finance-app.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '1068940728534',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:1068940728534:web:729c2d235fed4470b89177',
 };
 
 let app: ReturnType<typeof initializeApp> | null = null;
@@ -69,7 +69,6 @@ export async function syncTransactions(): Promise<void> {
   if (!userId) return;
 
   try {
-    // Push unsynced local transactions to Firebase
     const localTxns = getTransactions();
     const unsyncedTxns = localTxns.filter((t) => !t.synced);
 
@@ -92,18 +91,15 @@ export async function syncTransactions(): Promise<void> {
       markTransactionsSynced(syncedIds);
     }
 
-    // Pull remote transactions (for restore scenario)
-    const lastSync = getItem<number>(STORAGE_KEYS.LAST_SYNC) || 0;
     const txnCollection = collection(db, `users/${userId}/transactions`);
     const snapshot = await getDocs(txnCollection);
 
     const remoteTxns: Transaction[] = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data() as Transaction;
-      remoteTxns.push({ ...data, id: doc.id, synced: true });
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as Transaction;
+      remoteTxns.push({ ...data, id: docSnap.id, synced: true });
     });
 
-    // Merge: latest timestamp wins
     const localMap = new Map(localTxns.map((t) => [t.id, t]));
     for (const remote of remoteTxns) {
       const local = localMap.get(remote.id);

@@ -1,4 +1,10 @@
-import { randomUUID } from 'expo-crypto';
+function generateId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 import { Transaction } from '../models/Transaction';
 import { getItem, setItem, STORAGE_KEYS } from './mmkv';
 
@@ -12,7 +18,7 @@ export function addTransaction(
   const transactions = getTransactions();
   const newTxn: Transaction = {
     ...txn,
-    id: randomUUID(),
+    id: generateId(),
     timestamp: Date.now(),
     synced: false,
   };
@@ -29,7 +35,7 @@ export function updateTransaction(
   const index = transactions.findIndex((t) => t.id === id);
   if (index === -1) return null;
 
-  transactions[index] = { ...transactions[index], ...updates };
+  transactions[index] = { ...transactions[index], ...updates, synced: false };
   setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
   return transactions[index];
 }
@@ -60,10 +66,40 @@ export function getTodayTotal(): number {
   );
 }
 
+export function getWeeklyTotal(): number {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  monday.setHours(0, 0, 0, 0);
+
+  return getTransactions()
+    .filter((t) => t.timestamp >= monday.getTime())
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+export function getMonthlyTotal(): number {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  return getTransactions()
+    .filter((t) => t.timestamp >= monthStart.getTime())
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+export function getPeriodTotal(): number {
+  const period = getBudgetPeriod();
+  if (period === 'weekly') return getWeeklyTotal();
+  if (period === 'monthly') return getMonthlyTotal();
+  return getTodayTotal();
+}
+
 export function getWeeklyData(): { day: string; amount: number }[] {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday
+  const dayOfWeek = today.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
   return days.map((label, i) => {
@@ -104,6 +140,16 @@ export function getDailyBudget(): number {
 
 export function setDailyBudget(budget: number): void {
   setItem(STORAGE_KEYS.DAILY_BUDGET, budget);
+}
+
+export type BudgetPeriod = 'daily' | 'weekly' | 'monthly';
+
+export function getBudgetPeriod(): BudgetPeriod {
+  return getItem<BudgetPeriod>('budget_period') || 'daily';
+}
+
+export function setBudgetPeriod(period: BudgetPeriod): void {
+  setItem('budget_period', period);
 }
 
 export function markTransactionsSynced(ids: string[]): void {

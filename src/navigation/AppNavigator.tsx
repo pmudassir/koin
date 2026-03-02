@@ -1,21 +1,117 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  AppState,
+  AppStateStatus,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../theme';
+import { isBiometricsEnabled, authenticateWithBiometrics } from '../services/security';
 
 import HomeScreen from '../screens/HomeScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import SmartSuggestionsScreen from '../screens/SmartSuggestionsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
+import AllTransactionsScreen from '../screens/AllTransactionsScreen';
 import PendingScreen from '../screens/PendingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// ─── Lock Screen ──────────────────────────────────
+function LockScreen({ onUnlock }: { onUnlock: () => void }) {
+  const [error, setError] = useState(false);
+
+  const authenticate = async () => {
+    setError(false);
+    const success = await authenticateWithBiometrics();
+    if (success) {
+      onUnlock();
+    } else {
+      setError(true);
+    }
+  };
+
+  useEffect(() => {
+    authenticate();
+  }, []);
+
+  return (
+    <View style={lockStyles.container}>
+      <View style={lockStyles.iconWrapper}>
+        <MaterialIcons name="lock" size={48} color={Colors.primary} />
+      </View>
+      <Text style={lockStyles.title}>Koin is Locked</Text>
+      <Text style={lockStyles.subtitle}>Authenticate to continue</Text>
+      {error && (
+        <Text style={lockStyles.error}>Authentication failed</Text>
+      )}
+      <TouchableOpacity style={lockStyles.button} onPress={authenticate}>
+        <MaterialIcons name="fingerprint" size={28} color={Colors.white} />
+        <Text style={lockStyles.buttonText}>Unlock</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const lockStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.backgroundDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  iconWrapper: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  title: {
+    color: Colors.slate100,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  subtitle: {
+    color: Colors.slate400,
+    fontSize: 15,
+  },
+  error: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 24,
+  },
+  buttonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+});
+
+// ─── Tab Bar ──────────────────────────────────
 function CustomTabBarButton({ children, onPress }: any) {
   return (
     <TouchableOpacity
@@ -44,12 +140,8 @@ function TabNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialIcons
-              name="home"
-              size={24}
-              color={color}
-            />
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="home" size={24} color={color} />
           ),
         }}
       />
@@ -101,7 +193,40 @@ function TabNavigator() {
   );
 }
 
+// ─── Main Navigator ──────────────────────────────────
 export default function AppNavigator() {
+  const [isLocked, setIsLocked] = useState(false);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    // Check on launch
+    if (isBiometricsEnabled()) {
+      setIsLocked(true);
+    }
+    setInitialCheckDone(true);
+
+    // Re-lock when app comes to foreground
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        isBiometricsEnabled()
+      ) {
+        setIsLocked(true);
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  if (!initialCheckDone) return null;
+
+  if (isLocked) {
+    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+  }
+
   return (
     <NavigationContainer>
       <Stack.Navigator
@@ -118,6 +243,13 @@ export default function AppNavigator() {
           options={{
             presentation: 'modal',
             animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="AllTransactions"
+          component={AllTransactionsScreen}
+          options={{
+            animation: 'slide_from_right',
           }}
         />
         <Stack.Screen

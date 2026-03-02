@@ -5,31 +5,43 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Colors } from '../theme';
 import { Category } from '../models/Transaction';
-import { addTransaction } from '../storage/transactionStorage';
+import { addTransaction, updateTransaction } from '../storage/transactionStorage';
 import { getCombinedSuggestions, Suggestion } from '../services/suggestions';
 import { categorize } from '../utils/categorization';
+import { getCustomCategories } from '../storage/categoryStorage';
 import NumPad from '../components/NumPad';
 import CategoryChip from '../components/CategoryChip';
 
-const CATEGORIES: Category[] = ['Food', 'Transport', 'Groceries', 'Bills', 'Shopping', 'Health', 'Others'];
+const DEFAULT_CATEGORIES: Category[] = ['Food', 'Transport', 'Groceries', 'Bills', 'Shopping', 'Health', 'Entertainment', 'Others'];
 
 export default function AddExpenseScreen() {
   const navigation = useNavigation();
-  const [amount, setAmount] = useState('0');
-  const [merchant, setMerchant] = useState('');
-  const [category, setCategory] = useState<Category>('Food');
-  const [note, setNote] = useState('');
+  const route = useRoute<any>();
+  const editingTxn = route.params?.transaction;
+  const isEditing = !!editingTxn;
+
+  const [amount, setAmount] = useState(editingTxn ? editingTxn.amount.toString() : '0');
+  const [merchant, setMerchant] = useState(editingTxn?.merchant || '');
+  const [category, setCategory] = useState<Category>(editingTxn?.category || 'Food');
+  const [note, setNote] = useState(editingTxn?.note || '');
   const [suggestions] = useState<Suggestion[]>(() => getCombinedSuggestions());
 
+  // Load custom categories
+  const customCategories = getCustomCategories();
+  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories.map((c: { name: string }) => c.name as Category)];
+
   const handleKeyPress = (key: string) => {
-    setAmount((prev) => {
+    setAmount((prev: string) => {
       if (prev === '0' && key !== '.') return key;
       if (key === '.' && prev.includes('.')) return prev;
       if (prev.includes('.') && prev.split('.')[1].length >= 2) return prev;
@@ -38,7 +50,7 @@ export default function AddExpenseScreen() {
   };
 
   const handleBackspace = () => {
-    setAmount((prev) => {
+    setAmount((prev: string) => {
       if (prev.length <= 1) return '0';
       return prev.slice(0, -1);
     });
@@ -57,18 +69,28 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    addTransaction({
-      amount: numericAmount,
-      merchant: merchant || 'Unknown',
-      category: category,
-      isAutoDetected: false,
-      note: note || undefined,
-    });
+    const merchantName = merchant.trim() || category;
+
+    if (isEditing) {
+      updateTransaction(editingTxn.id, {
+        amount: numericAmount,
+        merchant: merchantName,
+        category,
+        note: note.trim() || undefined,
+      });
+    } else {
+      addTransaction({
+        amount: numericAmount,
+        merchant: merchantName,
+        category,
+        isAutoDetected: false,
+        note: note.trim() || undefined,
+      });
+    }
 
     navigation.goBack();
   };
 
-  // Format display amount with commas
   const displayAmount = amount === '0' ? '0' :
     parseFloat(amount).toLocaleString('en-IN', {
       maximumFractionDigits: 2,
@@ -86,7 +108,9 @@ export default function AddExpenseScreen() {
           >
             <MaterialIcons name="close" size={24} color={Colors.slate100} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Expense</Text>
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'Edit Expense' : 'Add Expense'}
+          </Text>
           <TouchableOpacity style={styles.historyButton}>
             <MaterialIcons name="history" size={24} color={Colors.primary} />
           </TouchableOpacity>
@@ -99,15 +123,37 @@ export default function AddExpenseScreen() {
             <Text style={styles.currencySymbol}>₹</Text>
             <Text style={styles.amountText}>{amount === '0' ? '0' : displayAmount}</Text>
           </View>
-          <TouchableOpacity style={styles.noteContainer}>
-            <Text style={styles.noteText}>
-              {note || 'Add a note...'}
-            </Text>
-          </TouchableOpacity>
+
+          {/* Merchant Name Input */}
+          <View style={styles.inputRow}>
+            <MaterialIcons name="store" size={18} color={Colors.slate500} />
+            <TextInput
+              style={styles.merchantInput}
+              placeholder="Merchant name (e.g. Swiggy, Uber)"
+              placeholderTextColor={Colors.slate600}
+              value={merchant}
+              onChangeText={setMerchant}
+              returnKeyType="done"
+              autoCapitalize="words"
+            />
+          </View>
+
+          {/* Note Input */}
+          <View style={styles.inputRow}>
+            <MaterialIcons name="edit-note" size={18} color={Colors.slate500} />
+            <TextInput
+              style={styles.noteInput}
+              placeholder="Add a note (optional)"
+              placeholderTextColor={Colors.slate600}
+              value={note}
+              onChangeText={setNote}
+              returnKeyType="done"
+            />
+          </View>
         </View>
 
         {/* Smart Suggestions */}
-        {suggestions.length > 0 && (
+        {!isEditing && suggestions.length > 0 && (
           <View style={styles.suggestionsSection}>
             <Text style={styles.suggestionsLabel}>SMART SUGGESTIONS</Text>
             <ScrollView
@@ -146,11 +192,9 @@ export default function AddExpenseScreen() {
 
         {/* Category Chips */}
         <View style={styles.categorySection}>
-          <ScrollView
-            contentContainerStyle={styles.categoryScroll}
-          >
+          <ScrollView contentContainerStyle={styles.categoryScroll}>
             <View style={styles.categoryWrap}>
-              {CATEGORIES.map((cat) => (
+              {allCategories.map((cat) => (
                 <CategoryChip
                   key={cat}
                   category={cat}
@@ -175,7 +219,9 @@ export default function AddExpenseScreen() {
               activeOpacity={0.8}
               onPress={handleSave}
             >
-              <Text style={styles.saveButtonText}>Save Expense</Text>
+              <Text style={styles.saveButtonText}>
+                {isEditing ? 'Update Expense' : 'Save Expense'}
+              </Text>
               <MaterialIcons name="check-circle" size={22} color={Colors.white} />
             </TouchableOpacity>
           </View>
@@ -186,7 +232,7 @@ export default function AddExpenseScreen() {
 }
 
 function getCategoryMaterialIcon(category: Category): keyof typeof MaterialIcons.glyphMap {
-  const map: Record<Category, keyof typeof MaterialIcons.glyphMap> = {
+  const map: Record<string, keyof typeof MaterialIcons.glyphMap> = {
     Food: 'restaurant',
     Transport: 'directions-car',
     Groceries: 'shopping-cart',
@@ -240,8 +286,9 @@ const styles = StyleSheet.create({
   },
   amountSection: {
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 4,
+    paddingHorizontal: 24,
   },
   amountLabel: {
     color: Colors.primary,
@@ -254,7 +301,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 8,
+    marginTop: 4,
   },
   currencySymbol: {
     color: Colors.slate400,
@@ -263,24 +310,39 @@ const styles = StyleSheet.create({
   },
   amountText: {
     color: Colors.slate100,
-    fontSize: 56,
+    fontSize: 48,
     fontWeight: '700',
     letterSpacing: -1,
   },
-  noteContainer: {
-    height: 32,
+  inputRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
+    gap: 10,
+    width: '100%',
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(30, 41, 59, 0.8)',
   },
-  noteText: {
-    color: Colors.slate500,
+  merchantInput: {
+    flex: 1,
+    color: Colors.slate100,
+    fontSize: 15,
+    fontWeight: '500',
+    padding: 0,
+  },
+  noteInput: {
+    flex: 1,
+    color: Colors.slate300,
     fontSize: 14,
-    fontStyle: 'italic',
+    padding: 0,
   },
   suggestionsSection: {
-    marginTop: 24,
-    marginBottom: 16,
+    marginTop: 12,
+    marginBottom: 8,
   },
   suggestionsLabel: {
     color: Colors.slate400,
@@ -289,7 +351,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   suggestionsScroll: {
     paddingHorizontal: 24,
@@ -315,7 +377,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   categorySection: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   categoryScroll: {
     paddingHorizontal: 24,
@@ -332,19 +394,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(30, 41, 59, 0.8)',
   },
   saveButtonContainer: {
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 8,
   },
   saveButton: {
     backgroundColor: Colors.primary,
-    height: 60,
+    height: 56,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
