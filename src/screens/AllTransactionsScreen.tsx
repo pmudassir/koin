@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Alert,
 } from 'react-native';
+import { showConfirm } from '../components/Toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -76,21 +76,16 @@ export default function AllTransactionsScreen() {
   );
 
   const handleDelete = (txn: Transaction) => {
-    Alert.alert(
-      'Delete Transaction',
-      `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteTransaction(txn.id);
-            loadData();
-          },
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Delete Transaction',
+      message: `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteTransaction(txn.id);
+        loadData();
+      },
+    });
   };
 
   const handleEdit = (txn: Transaction) => {

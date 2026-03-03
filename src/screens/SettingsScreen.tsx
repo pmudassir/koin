@@ -11,6 +11,7 @@ import {
   TextInput,
   FlatList,
 } from 'react-native';
+import { showToast, showConfirm } from '../components/Toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../theme';
@@ -76,7 +77,7 @@ export default function SettingsScreen() {
 
   const handleAddCategory = () => {
     if (!newCatName.trim()) {
-      Alert.alert('Error', 'Please enter a category name');
+      showToast({ type: 'error', title: 'Missing Name', message: 'Please enter a category name' });
       return;
     }
     const cat: CustomCategory = {
@@ -92,21 +93,16 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteCategory = (name: string) => {
-    Alert.alert(
-      'Delete Category',
-      `Remove "${name}" category?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            removeCustomCategory(name);
-            setCustomCategories(getCustomCategories());
-          },
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Delete Category',
+      message: `Remove "${name}" category?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        removeCustomCategory(name);
+        setCustomCategories(getCustomCategories());
+      },
+    });
   };
 
   const COLORS = ['#60a5fa', '#4ade80', '#f59e0b', '#f87171', '#c084fc', '#22d3ee', '#fb923c', '#f472b6'];

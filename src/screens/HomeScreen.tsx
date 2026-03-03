@@ -6,9 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  RefreshControl,
-  Alert,
+  RefreshControl
 } from 'react-native';
+import { showToast } from '../components/Toast';
+import { showConfirm } from '../components/Toast';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -54,11 +55,11 @@ export default function HomeScreen() {
   useEffect(() => {
     const cleanup = setupShareListener(() => {
       loadData();
-      Alert.alert(
-        '✅ Transaction Added',
-        'A shared transaction was automatically added.',
-        [{ text: 'OK' }]
-      );
+      showToast({
+        type: 'success',
+        title: 'Transaction Added',
+        message: 'A shared transaction was automatically added.',
+      });
     });
     return cleanup;
   }, [loadData]);
@@ -70,21 +71,16 @@ export default function HomeScreen() {
   }, [loadData]);
 
   const handleDelete = (txn: Transaction) => {
-    Alert.alert(
-      'Delete Transaction',
-      `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteTransaction(txn.id);
-            loadData();
-          },
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Delete Transaction',
+      message: `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteTransaction(txn.id);
+        loadData();
+      },
+    });
   };
 
   const handleEdit = (txn: Transaction) => {

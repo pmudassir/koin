@@ -1,19 +1,19 @@
 function generateId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
-import { Transaction } from '../models/Transaction';
-import { getItem, setItem, STORAGE_KEYS } from './mmkv';
+import { Transaction } from "../models/Transaction";
+import { getItem, setItem, STORAGE_KEYS } from "./mmkv";
 
 export function getTransactions(): Transaction[] {
   return getItem<Transaction[]>(STORAGE_KEYS.TRANSACTIONS) || [];
 }
 
 export function addTransaction(
-  txn: Omit<Transaction, 'id' | 'timestamp' | 'synced'>
+  txn: Omit<Transaction, "id" | "timestamp" | "synced">,
 ): Transaction {
   const transactions = getTransactions();
   const newTxn: Transaction = {
@@ -24,12 +24,13 @@ export function addTransaction(
   };
   transactions.unshift(newTxn);
   setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
+
   return newTxn;
 }
 
 export function updateTransaction(
   id: string,
-  updates: Partial<Transaction>
+  updates: Partial<Transaction>,
 ): Transaction | null {
   const transactions = getTransactions();
   const index = transactions.findIndex((t) => t.id === id);
@@ -37,6 +38,7 @@ export function updateTransaction(
 
   transactions[index] = { ...transactions[index], ...updates, synced: false };
   setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
+
   return transactions[index];
 }
 
@@ -55,14 +57,14 @@ export function getTransactionsForDay(date: Date): Transaction[] {
   end.setHours(23, 59, 59, 999);
 
   return getTransactions().filter(
-    (t) => t.timestamp >= start.getTime() && t.timestamp <= end.getTime()
+    (t) => t.timestamp >= start.getTime() && t.timestamp <= end.getTime(),
   );
 }
 
 export function getTodayTotal(): number {
   return getTransactionsForDay(new Date()).reduce(
     (sum, t) => sum + t.amount,
-    0
+    0,
   );
 }
 
@@ -91,13 +93,13 @@ export function getMonthlyTotal(): number {
 
 export function getPeriodTotal(): number {
   const period = getBudgetPeriod();
-  if (period === 'weekly') return getWeeklyTotal();
-  if (period === 'monthly') return getMonthlyTotal();
+  if (period === "weekly") return getWeeklyTotal();
+  if (period === "monthly") return getMonthlyTotal();
   return getTodayTotal();
 }
 
 export function getWeeklyData(): { day: string; amount: number }[] {
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const days = ["M", "T", "W", "T", "F", "S", "S"];
   const today = new Date();
   const dayOfWeek = today.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -142,21 +144,45 @@ export function setDailyBudget(budget: number): void {
   setItem(STORAGE_KEYS.DAILY_BUDGET, budget);
 }
 
-export type BudgetPeriod = 'daily' | 'weekly' | 'monthly';
+export type BudgetPeriod = "daily" | "weekly" | "monthly";
 
 export function getBudgetPeriod(): BudgetPeriod {
-  return getItem<BudgetPeriod>('budget_period') || 'daily';
+  return getItem<BudgetPeriod>("budget_period") || "daily";
 }
 
 export function setBudgetPeriod(period: BudgetPeriod): void {
-  setItem('budget_period', period);
+  setItem("budget_period", period);
 }
 
 export function markTransactionsSynced(ids: string[]): void {
   const transactions = getTransactions();
   const idSet = new Set(ids);
   const updated = transactions.map((t) =>
-    idSet.has(t.id) ? { ...t, synced: true } : t
+    idSet.has(t.id) ? { ...t, synced: true } : t,
   );
   setItem(STORAGE_KEYS.TRANSACTIONS, updated);
+}
+
+export function getTransactionsForMonth(
+  year: number,
+  month: number,
+): Transaction[] {
+  const start = new Date(year, month, 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(year, month + 1, 0);
+  end.setHours(23, 59, 59, 999);
+
+  return getTransactions().filter(
+    (t) => t.timestamp >= start.getTime() && t.timestamp <= end.getTime(),
+  );
+}
+
+export function getTransactionsForDateRange(
+  startDate: Date,
+  endDate: Date,
+): Transaction[] {
+  return getTransactions().filter(
+    (t) =>
+      t.timestamp >= startDate.getTime() && t.timestamp <= endDate.getTime(),
+  );
 }

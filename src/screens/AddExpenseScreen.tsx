@@ -1,28 +1,39 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { Colors } from '../theme';
-import { Category } from '../models/Transaction';
-import { addTransaction, updateTransaction } from '../storage/transactionStorage';
-import { getCombinedSuggestions, Suggestion } from '../services/suggestions';
-import { categorize } from '../utils/categorization';
-import { getCustomCategories } from '../storage/categoryStorage';
-import NumPad from '../components/NumPad';
-import CategoryChip from '../components/CategoryChip';
+  TextInput
+} from "react-native";
+import { showToast } from "../components/Toast";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { Colors } from "../theme";
+import { Category } from "../models/Transaction";
+import {
+  addTransaction,
+  updateTransaction,
+} from "../storage/transactionStorage";
+import { recordCategoryOverride } from "../services/smartCategorizer";
+import { getCombinedSuggestions, Suggestion } from "../services/suggestions";
+import { categorize } from "../utils/categorization";
+import { getCustomCategories } from "../storage/categoryStorage";
+import NumPad from "../components/NumPad";
+import CategoryChip from "../components/CategoryChip";
 
-const DEFAULT_CATEGORIES: Category[] = ['Food', 'Transport', 'Groceries', 'Bills', 'Shopping', 'Health', 'Entertainment', 'Others'];
+const DEFAULT_CATEGORIES: Category[] = [
+  "Food",
+  "Transport",
+  "Groceries",
+  "Bills",
+  "Shopping",
+  "Health",
+  "Entertainment",
+  "Others",
+];
 
 export default function AddExpenseScreen() {
   const navigation = useNavigation();
@@ -30,28 +41,35 @@ export default function AddExpenseScreen() {
   const editingTxn = route.params?.transaction;
   const isEditing = !!editingTxn;
 
-  const [amount, setAmount] = useState(editingTxn ? editingTxn.amount.toString() : '0');
-  const [merchant, setMerchant] = useState(editingTxn?.merchant || '');
-  const [category, setCategory] = useState<Category>(editingTxn?.category || 'Food');
-  const [note, setNote] = useState(editingTxn?.note || '');
+  const [amount, setAmount] = useState(
+    editingTxn ? editingTxn.amount.toString() : "0",
+  );
+  const [merchant, setMerchant] = useState(editingTxn?.merchant || "");
+  const [category, setCategory] = useState<Category>(
+    editingTxn?.category || "Food",
+  );
+  const [note, setNote] = useState(editingTxn?.note || "");
   const [suggestions] = useState<Suggestion[]>(() => getCombinedSuggestions());
 
   // Load custom categories
   const customCategories = getCustomCategories();
-  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories.map((c: { name: string }) => c.name as Category)];
+  const allCategories = [
+    ...DEFAULT_CATEGORIES,
+    ...customCategories.map((c: { name: string }) => c.name as Category),
+  ];
 
   const handleKeyPress = (key: string) => {
     setAmount((prev: string) => {
-      if (prev === '0' && key !== '.') return key;
-      if (key === '.' && prev.includes('.')) return prev;
-      if (prev.includes('.') && prev.split('.')[1].length >= 2) return prev;
+      if (prev === "0" && key !== ".") return key;
+      if (key === "." && prev.includes(".")) return prev;
+      if (prev.includes(".") && prev.split(".")[1].length >= 2) return prev;
       return prev + key;
     });
   };
 
   const handleBackspace = () => {
     setAmount((prev: string) => {
-      if (prev.length <= 1) return '0';
+      if (prev.length <= 1) return "0";
       return prev.slice(0, -1);
     });
   };
@@ -65,13 +83,21 @@ export default function AddExpenseScreen() {
   const handleSave = () => {
     const numericAmount = parseFloat(amount);
     if (numericAmount <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter an amount greater than zero.');
+      showToast({
+        type: 'error',
+        title: 'Invalid Amount',
+        message: 'Please enter an amount greater than zero.',
+      });
       return;
     }
 
     const merchantName = merchant.trim() || category;
 
     if (isEditing) {
+      // Learn from user's category choice for this merchant
+      if (editingTxn.category !== category) {
+        recordCategoryOverride(merchantName, category);
+      }
       updateTransaction(editingTxn.id, {
         amount: numericAmount,
         merchant: merchantName,
@@ -91,15 +117,17 @@ export default function AddExpenseScreen() {
     navigation.goBack();
   };
 
-  const displayAmount = amount === '0' ? '0' :
-    parseFloat(amount).toLocaleString('en-IN', {
-      maximumFractionDigits: 2,
-      useGrouping: true,
-    });
+  const displayAmount =
+    amount === "0"
+      ? "0"
+      : parseFloat(amount).toLocaleString("en-IN", {
+          maximumFractionDigits: 2,
+          useGrouping: true,
+        });
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -109,7 +137,7 @@ export default function AddExpenseScreen() {
             <MaterialIcons name="close" size={24} color={Colors.slate100} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {isEditing ? 'Edit Expense' : 'Add Expense'}
+            {isEditing ? "Edit Expense" : "Add Expense"}
           </Text>
           <TouchableOpacity style={styles.historyButton}>
             <MaterialIcons name="history" size={24} color={Colors.primary} />
@@ -121,7 +149,9 @@ export default function AddExpenseScreen() {
           <Text style={styles.amountLabel}>SPENDING AMOUNT</Text>
           <View style={styles.amountRow}>
             <Text style={styles.currencySymbol}>₹</Text>
-            <Text style={styles.amountText}>{amount === '0' ? '0' : displayAmount}</Text>
+            <Text style={styles.amountText}>
+              {amount === "0" ? "0" : displayAmount}
+            </Text>
           </View>
 
           {/* Merchant Name Input */}
@@ -182,7 +212,7 @@ export default function AddExpenseScreen() {
                       i === 0 && { color: Colors.slate100 },
                     ]}
                   >
-                    {s.merchant} ₹{s.amount.toLocaleString('en-IN')}
+                    {s.merchant} ₹{s.amount.toLocaleString("en-IN")}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -220,9 +250,13 @@ export default function AddExpenseScreen() {
               onPress={handleSave}
             >
               <Text style={styles.saveButtonText}>
-                {isEditing ? 'Update Expense' : 'Save Expense'}
+                {isEditing ? "Update Expense" : "Save Expense"}
               </Text>
-              <MaterialIcons name="check-circle" size={22} color={Colors.white} />
+              <MaterialIcons
+                name="check-circle"
+                size={22}
+                color={Colors.white}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -231,19 +265,21 @@ export default function AddExpenseScreen() {
   );
 }
 
-function getCategoryMaterialIcon(category: Category): keyof typeof MaterialIcons.glyphMap {
+function getCategoryMaterialIcon(
+  category: Category,
+): keyof typeof MaterialIcons.glyphMap {
   const map: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-    Food: 'restaurant',
-    Transport: 'directions-car',
-    Groceries: 'shopping-cart',
-    Bills: 'receipt-long',
-    Shopping: 'shopping-bag',
-    Health: 'favorite',
-    Transfer: 'swap-horiz',
-    Entertainment: 'movie',
-    Others: 'more-horiz',
+    Food: "restaurant",
+    Transport: "directions-car",
+    Groceries: "shopping-cart",
+    Bills: "receipt-long",
+    Shopping: "shopping-bag",
+    Health: "favorite",
+    Transfer: "swap-horiz",
+    Entertainment: "movie",
+    Others: "more-horiz",
   };
-  return map[category] || 'more-horiz';
+  return map[category] || "more-horiz";
 }
 
 const styles = StyleSheet.create({
@@ -255,9 +291,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
@@ -266,26 +302,26 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     color: Colors.slate100,
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: -0.2,
   },
   historyButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(19, 127, 236, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   amountSection: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: 12,
     paddingBottom: 4,
     paddingHorizontal: 24,
@@ -293,45 +329,45 @@ const styles = StyleSheet.create({
   amountLabel: {
     color: Colors.primary,
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
     letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 4,
   },
   currencySymbol: {
     color: Colors.slate400,
     fontSize: 32,
-    fontWeight: '300',
+    fontWeight: "300",
   },
   amountText: {
     color: Colors.slate100,
     fontSize: 48,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -1,
   },
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-    width: '100%',
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    width: "100%",
+    backgroundColor: "rgba(30, 41, 59, 0.4)",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
+    borderColor: "rgba(30, 41, 59, 0.8)",
   },
   merchantInput: {
     flex: 1,
     color: Colors.slate100,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: "500",
     padding: 0,
   },
   noteInput: {
@@ -347,10 +383,10 @@ const styles = StyleSheet.create({
   suggestionsLabel: {
     color: Colors.slate400,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    textAlign: 'center',
+    textTransform: "uppercase",
+    textAlign: "center",
     marginBottom: 10,
   },
   suggestionsScroll: {
@@ -358,8 +394,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   suggestionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
     height: 40,
@@ -367,14 +403,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.slate800,
   },
   suggestionChipActive: {
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+    backgroundColor: "rgba(19, 127, 236, 0.1)",
     borderWidth: 1,
-    borderColor: 'rgba(19, 127, 236, 0.2)',
+    borderColor: "rgba(19, 127, 236, 0.2)",
   },
   suggestionText: {
     color: Colors.slate300,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   categorySection: {
     marginBottom: 4,
@@ -383,21 +419,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   categoryWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: 8,
   },
   bottomSection: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     paddingTop: 20,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(30, 41, 59, 0.8)',
+    borderTopColor: "rgba(30, 41, 59, 0.8)",
   },
   saveButtonContainer: {
     paddingHorizontal: 24,
@@ -408,9 +444,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     height: 56,
     borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -421,6 +457,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: Colors.white,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

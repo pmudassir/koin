@@ -14,6 +14,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../theme';
 import { isBiometricsEnabled, authenticateWithBiometrics } from '../services/security';
+import { ToastProvider, ConfirmDialog } from '../components/Toast';
 
 import HomeScreen from '../screens/HomeScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
@@ -258,40 +259,43 @@ export default function AppNavigator() {
   };
 
   return (
-    <NavigationContainer linking={linking}>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: 'slide_from_bottom',
-          contentStyle: { backgroundColor: Colors.backgroundDark },
-        }}
-      >
-        <Stack.Screen name="MainTabs" component={TabNavigator} />
-        <Stack.Screen
-          name="AddExpense"
-          component={AddExpenseScreen}
-          options={{
-            presentation: 'modal',
+    <ToastProvider>
+      <NavigationContainer linking={linking}>
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
             animation: 'slide_from_bottom',
+            contentStyle: { backgroundColor: Colors.backgroundDark },
           }}
-        />
-        <Stack.Screen
-          name="AllTransactions"
-          component={AllTransactionsScreen}
-          options={{
-            animation: 'slide_from_right',
-          }}
-        />
-        <Stack.Screen
-          name="Pending"
-          component={PendingScreen}
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+        >
+          <Stack.Screen name="MainTabs" component={TabNavigator} />
+          <Stack.Screen
+            name="AddExpense"
+            component={AddExpenseScreen}
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen
+            name="AllTransactions"
+            component={AllTransactionsScreen}
+            options={{
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="Pending"
+            component={PendingScreen}
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+      <ConfirmDialog />
+    </ToastProvider>
   );
 }
 
