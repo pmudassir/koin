@@ -12,6 +12,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme';
 import { isBiometricsEnabled, authenticateWithBiometrics } from '../services/security';
 import { ToastProvider, ConfirmDialog } from '../components/Toast';
@@ -129,12 +130,19 @@ function CustomTabBarButton({ children, onPress }: any) {
 }
 
 function TabNavigator() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 28 : 8);
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: true,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          ...styles.tabBar,
+          height: 56 + bottomPadding,
+          paddingBottom: bottomPadding,
+        },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.slate500,
         tabBarLabelStyle: styles.tabBarLabel,
@@ -304,8 +312,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 25, 34, 0.95)',
     borderTopColor: 'rgba(30, 41, 59, 0.8)',
     borderTopWidth: 1,
-    height: Platform.OS === 'ios' ? 88 : 65,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
     paddingTop: 8,
     elevation: 0,
   },

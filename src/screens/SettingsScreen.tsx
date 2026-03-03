@@ -11,6 +11,8 @@ import {
   TextInput,
   FlatList,
   Platform,
+  PermissionsAndroid,
+  Linking,
 } from "react-native";
 import { showToast, showConfirm } from "../components/Toast";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -34,7 +36,6 @@ import {
   CustomCategory,
   AVAILABLE_ICONS,
 } from "../storage/categoryStorage";
-import { transactionDetector } from "../services/transactionDetector";
 
 export default function SettingsScreen() {
   const [biometrics, setBiometrics] = useState(isBiometricsEnabled());
@@ -351,19 +352,35 @@ export default function SettingsScreen() {
               <View style={styles.settingsGroup}>
                 <TouchableOpacity
                   style={styles.settingRow}
-                  onPress={() => {
+                  onPress={async () => {
                     try {
-                      transactionDetector.requestSmsPermission();
-                      showToast({
-                        type: "info",
-                        title: "SMS Permission",
-                        message: "Check the permission dialog",
-                      });
+                      const granted = await PermissionsAndroid.request(
+                        PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
+                        {
+                          title: "SMS Permission",
+                          message: "Koin needs SMS access to auto-detect bank transactions.",
+                          buttonPositive: "Allow",
+                          buttonNegative: "Deny",
+                        }
+                      );
+                      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+                        showToast({
+                          type: "success",
+                          title: "SMS Permission",
+                          message: "Permission granted! Bank SMS will be auto-detected.",
+                        });
+                      } else {
+                        showToast({
+                          type: "info",
+                          title: "SMS Permission",
+                          message: "Permission denied. You can enable it in Settings.",
+                        });
+                      }
                     } catch (e) {
                       showToast({
                         type: "error",
                         title: "Error",
-                        message: "Could not request SMS permission",
+                        message: "Could not request SMS permission.",
                       });
                     }
                   }}
@@ -397,18 +414,12 @@ export default function SettingsScreen() {
                   style={styles.settingRow}
                   onPress={() => {
                     try {
-                      transactionDetector.openNotificationListenerSettings();
-                      showToast({
-                        type: "info",
-                        title: "Notification Access",
-                        message: "Enable Koin in the list",
-                      });
+                      Linking.sendIntent(
+                        "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
+                      );
                     } catch (e) {
-                      showToast({
-                        type: "error",
-                        title: "Error",
-                        message: "Could not open notification settings",
-                      });
+                      // Fallback: open general app settings
+                      Linking.openSettings();
                     }
                   }}
                 >
@@ -467,6 +478,33 @@ export default function SettingsScreen() {
                 </View>
               </View>
             </View>
+
+            <View style={styles.settingDivider} />
+
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => Linking.openURL("https://github.com/pmudassir")}
+            >
+              <View style={styles.settingLeft}>
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(100, 116, 139, 0.15)" },
+                  ]}
+                >
+                  <MaterialIcons name="code" size={20} color={Colors.slate400} />
+                </View>
+                <View>
+                  <Text style={styles.settingTitle}>Developer</Text>
+                  <Text style={styles.settingSubtitle}>github.com/pmudassir</Text>
+                </View>
+              </View>
+              <MaterialIcons
+                name="open-in-new"
+                size={18}
+                color={Colors.slate500}
+              />
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </SafeAreaView>
