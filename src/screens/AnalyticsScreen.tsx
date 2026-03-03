@@ -17,6 +17,7 @@ import {
   getTransactions,
 } from "../storage/transactionStorage";
 import { CATEGORY_COLORS, Category } from "../models/Transaction";
+import { getCustomCategories } from "../storage/categoryStorage";
 import {
   getMonthOverMonthChange,
   getSpendingTrend,
@@ -42,12 +43,22 @@ const CATEGORY_ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 };
 
 function getCategoryIcon(category: string): keyof typeof MaterialIcons.glyphMap {
-  return CATEGORY_ICON_MAP[category] || "more-horiz";
+  if (CATEGORY_ICON_MAP[category]) return CATEGORY_ICON_MAP[category];
+  const custom = getCustomCategories().find(
+    (c) => c.name.toLowerCase() === category.toLowerCase()
+  );
+  if (custom) return custom.icon as keyof typeof MaterialIcons.glyphMap;
+  return "more-horiz";
 }
 
 function getCategoryBarColor(category: string): string {
   const colors = CATEGORY_COLORS[category as Category];
-  return colors?.text || "#60a5fa";
+  if (colors?.text) return colors.text;
+  const custom = getCustomCategories().find(
+    (c) => c.name.toLowerCase() === category.toLowerCase()
+  );
+  if (custom) return custom.color;
+  return "#60a5fa";
 }
 
 const INSIGHT_TINTS = {
@@ -114,28 +125,6 @@ export default function AnalyticsScreen() {
   const maxDayAmount = Math.max(...weeklyData.map((d) => d.amount), 1);
   const maxTrendAmount = Math.max(...trendData.map((d) => d.amount), 1);
 
-  const getCategoryIcon = (
-    category: string,
-  ): keyof typeof MaterialIcons.glyphMap => {
-    const icons: Record<string, keyof typeof MaterialIcons.glyphMap> = {
-      Food: "restaurant",
-      Transport: "directions-car",
-      Groceries: "shopping-cart",
-      Bills: "receipt-long",
-      Shopping: "shopping-bag",
-      Health: "favorite",
-      Transfer: "swap-horiz",
-      Entertainment: "movie",
-      Others: "more-horiz",
-    };
-    return icons[category] || "more-horiz";
-  };
-
-  const getCategoryBarColor = (category: string): string => {
-    const colors = CATEGORY_COLORS[category as Category];
-    if (colors) return colors.text;
-    return Colors.primary;
-  };
 
   return (
     <View style={styles.screen}>
@@ -229,11 +218,13 @@ export default function AnalyticsScreen() {
             <View style={styles.insightsSection}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleRow}>
-                  <MaterialIcons
-                    name="auto-awesome"
-                    size={18}
-                    color="#fbbf24"
-                  />
+                  <View style={styles.aiIconBadge}>
+                    <MaterialIcons
+                      name="auto-awesome"
+                      size={14}
+                      color="#fbbf24"
+                    />
+                  </View>
                   <Text style={styles.sectionTitle}>AI Insights</Text>
                 </View>
               </View>
@@ -249,14 +240,23 @@ export default function AnalyticsScreen() {
                       key={insight.id}
                       style={[
                         styles.insightCard,
-                        { backgroundColor: tint.bg, borderColor: tint.border },
+                        {
+                          borderColor: tint.border,
+                        },
                       ]}
                     >
+                      {/* Accent bar at top */}
+                      <View
+                        style={[
+                          styles.insightAccent,
+                          { backgroundColor: tint.icon },
+                        ]}
+                      />
                       <View style={styles.insightHeader}>
                         <View
                           style={[
                             styles.insightIconBg,
-                            { backgroundColor: tint.border },
+                            { backgroundColor: tint.bg },
                           ]}
                         >
                           <MaterialIcons
@@ -268,11 +268,18 @@ export default function AnalyticsScreen() {
                           />
                         </View>
                         {insight.value && (
-                          <Text
-                            style={[styles.insightValue, { color: tint.text }]}
+                          <View
+                            style={[
+                              styles.insightValueBadge,
+                              { backgroundColor: tint.bg },
+                            ]}
                           >
-                            {insight.value}
-                          </Text>
+                            <Text
+                              style={[styles.insightValue, { color: tint.text }]}
+                            >
+                              {insight.value}
+                            </Text>
+                          </View>
                         )}
                       </View>
                       <Text style={styles.insightTitle}>{insight.title}</Text>
@@ -559,46 +566,72 @@ const styles = StyleSheet.create({
   sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+  },
+  aiIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "rgba(251, 191, 36, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   insightsScroll: {
     gap: 12,
     paddingRight: 24,
   },
   insightCard: {
-    width: SCREEN_WIDTH * 0.6,
-    borderRadius: 16,
-    padding: 16,
+    width: SCREEN_WIDTH * 0.62,
+    borderRadius: 18,
+    padding: 18,
+    paddingTop: 22,
     borderWidth: 1,
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    overflow: "hidden",
+  },
+  insightAccent: {
+    position: "absolute",
+    top: 0,
+    left: 20,
+    right: 20,
+    height: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    opacity: 0.6,
   },
   insightHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   insightIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
+  insightValueBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
   insightValue: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   insightTitle: {
     color: Colors.slate100,
     fontSize: 15,
     fontWeight: "700",
-    marginBottom: 4,
+    marginBottom: 5,
   },
   insightDesc: {
     color: Colors.slate400,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
   // Charts

@@ -6,6 +6,7 @@ import {
   Animated,
   TouchableOpacity,
   Dimensions,
+  Modal,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Colors } from "../theme";
@@ -24,26 +25,26 @@ interface ToastConfig {
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; iconName: keyof typeof MaterialIcons.glyphMap }> = {
   success: {
-    bg: "rgba(16, 185, 129, 0.12)",
-    border: "rgba(16, 185, 129, 0.25)",
+    bg: "rgba(13, 30, 26, 0.97)",
+    border: "rgba(16, 185, 129, 0.35)",
     icon: "#10b981",
     iconName: "check-circle",
   },
   error: {
-    bg: "rgba(239, 68, 68, 0.12)",
-    border: "rgba(239, 68, 68, 0.25)",
+    bg: "rgba(30, 13, 13, 0.97)",
+    border: "rgba(239, 68, 68, 0.35)",
     icon: "#ef4444",
     iconName: "error",
   },
   warning: {
-    bg: "rgba(245, 158, 11, 0.12)",
-    border: "rgba(245, 158, 11, 0.25)",
+    bg: "rgba(30, 24, 10, 0.97)",
+    border: "rgba(245, 158, 11, 0.35)",
     icon: "#f59e0b",
     iconName: "warning",
   },
   info: {
-    bg: "rgba(59, 130, 246, 0.12)",
-    border: "rgba(59, 130, 246, 0.25)",
+    bg: "rgba(12, 20, 35, 0.97)",
+    border: "rgba(59, 130, 246, 0.35)",
     icon: "#3b82f6",
     iconName: "info",
   },
@@ -117,62 +118,72 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
   }, [show]);
 
-  if (!visible || !config) return <>{children}</>;
-
-  const colors = TOAST_COLORS[config.type];
+  const colors = visible && config ? TOAST_COLORS[config.type] : null;
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       {children}
-      <Animated.View
-        style={[
-          styles.container,
-          {
-            transform: [{ translateY }],
-            opacity,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.toast,
-            {
-              backgroundColor: colors.bg,
-              borderColor: colors.border,
-            },
-          ]}
+      {visible && config && colors && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="none"
+          statusBarTranslucent
+          onRequestClose={hide}
         >
-          <View style={styles.iconContainer}>
-            <MaterialIcons name={colors.iconName} size={22} color={colors.icon} />
-          </View>
-          <View style={styles.textContainer}>
-            <Text style={styles.title}>{config.title}</Text>
-            {config.message && (
-              <Text style={styles.message} numberOfLines={2}>
-                {config.message}
-              </Text>
-            )}
-          </View>
-          {config.action ? (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                config.action?.onPress();
-                hide();
-              }}
+          <View style={styles.modalOverlay} pointerEvents="box-none">
+            <Animated.View
+              style={[
+                styles.container,
+                {
+                  transform: [{ translateY }],
+                  opacity,
+                },
+              ]}
             >
-              <Text style={[styles.actionText, { color: colors.icon }]}>
-                {config.action.label}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={hide} hitSlop={8}>
-              <MaterialIcons name="close" size={18} color={Colors.slate500} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </Animated.View>
-    </>
+              <View
+                style={[
+                  styles.toast,
+                  {
+                    backgroundColor: colors.bg,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.iconContainer}>
+                  <MaterialIcons name={colors.iconName} size={22} color={colors.icon} />
+                </View>
+                <View style={styles.textContainer}>
+                  <Text style={styles.title}>{config.title}</Text>
+                  {config.message && (
+                    <Text style={styles.message} numberOfLines={2}>
+                      {config.message}
+                    </Text>
+                  )}
+                </View>
+                {config.action ? (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      config.action?.onPress();
+                      hide();
+                    }}
+                  >
+                    <Text style={[styles.actionText, { color: colors.icon }]}>
+                      {config.action.label}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={hide} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={Colors.slate500} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          </View>
+        </Modal>
+      )}
+    </View>
   );
 }
 
@@ -308,6 +319,9 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 9999,
     elevation: 999,
+  },
+  modalOverlay: {
+    flex: 1,
   },
   toast: {
     flexDirection: "row",
