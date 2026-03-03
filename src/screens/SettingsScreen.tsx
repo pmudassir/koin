@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,37 +10,44 @@ import {
   Modal,
   TextInput,
   FlatList,
-} from 'react-native';
-import { showToast, showConfirm } from '../components/Toast';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { Colors } from '../theme';
-import { isBiometricsEnabled, setBiometricsEnabled } from '../services/security';
+  Platform,
+} from "react-native";
+import { showToast, showConfirm } from "../components/Toast";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { Colors } from "../theme";
+import {
+  isBiometricsEnabled,
+  setBiometricsEnabled,
+} from "../services/security";
 import {
   getDailyBudget,
   setDailyBudget,
   getBudgetPeriod,
   setBudgetPeriod,
   BudgetPeriod,
-} from '../storage/transactionStorage';
+} from "../storage/transactionStorage";
 import {
   getCustomCategories,
   addCustomCategory,
   removeCustomCategory,
   CustomCategory,
   AVAILABLE_ICONS,
-} from '../storage/categoryStorage';
+} from "../storage/categoryStorage";
+import { transactionDetector } from "../services/transactionDetector";
 
 export default function SettingsScreen() {
   const [biometrics, setBiometrics] = useState(isBiometricsEnabled());
   const [cloudSync, setCloudSync] = useState(false);
   const [budget, setBudget] = useState(getDailyBudget());
   const [period, setPeriod] = useState<BudgetPeriod>(getBudgetPeriod());
-  const [customCategories, setCustomCategories] = useState<CustomCategory[]>(getCustomCategories());
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>(
+    getCustomCategories(),
+  );
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('coffee');
-  const [newCatColor, setNewCatColor] = useState('#60a5fa');
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("coffee");
+  const [newCatColor, setNewCatColor] = useState("#60a5fa");
 
   const toggleBiometrics = (value: boolean) => {
     setBiometrics(value);
@@ -49,14 +56,14 @@ export default function SettingsScreen() {
 
   const handleBudgetChange = () => {
     Alert.prompt(
-      'Budget Amount',
+      "Budget Amount",
       `Set your ${period} spending limit (₹)`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Save',
+          text: "Save",
           onPress: (value?: string) => {
-            const num = parseFloat(value || '0');
+            const num = parseFloat(value || "0");
             if (num > 0) {
               setBudget(num);
               setDailyBudget(num);
@@ -64,9 +71,9 @@ export default function SettingsScreen() {
           },
         },
       ],
-      'plain-text',
+      "plain-text",
       budget.toString(),
-      'number-pad'
+      "number-pad",
     );
   };
 
@@ -77,7 +84,11 @@ export default function SettingsScreen() {
 
   const handleAddCategory = () => {
     if (!newCatName.trim()) {
-      showToast({ type: 'error', title: 'Missing Name', message: 'Please enter a category name' });
+      showToast({
+        type: "error",
+        title: "Missing Name",
+        message: "Please enter a category name",
+      });
       return;
     }
     const cat: CustomCategory = {
@@ -88,15 +99,15 @@ export default function SettingsScreen() {
     addCustomCategory(cat);
     setCustomCategories(getCustomCategories());
     setShowCategoryModal(false);
-    setNewCatName('');
-    setNewCatIcon('coffee');
+    setNewCatName("");
+    setNewCatIcon("coffee");
   };
 
   const handleDeleteCategory = (name: string) => {
     showConfirm({
-      title: 'Delete Category',
+      title: "Delete Category",
       message: `Remove "${name}" category?`,
-      confirmLabel: 'Delete',
+      confirmLabel: "Delete",
       destructive: true,
       onConfirm: () => {
         removeCustomCategory(name);
@@ -105,11 +116,20 @@ export default function SettingsScreen() {
     });
   };
 
-  const COLORS = ['#60a5fa', '#4ade80', '#f59e0b', '#f87171', '#c084fc', '#22d3ee', '#fb923c', '#f472b6'];
+  const COLORS = [
+    "#60a5fa",
+    "#4ade80",
+    "#f59e0b",
+    "#f87171",
+    "#c084fc",
+    "#22d3ee",
+    "#fb923c",
+    "#f472b6",
+  ];
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Settings</Text>
         </View>
@@ -133,7 +153,12 @@ export default function SettingsScreen() {
           <View style={styles.settingsGroup}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(37, 99, 235, 0.15)' }]}>
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(37, 99, 235, 0.15)" },
+                  ]}
+                >
                   <MaterialIcons name="fingerprint" size={20} color="#60a5fa" />
                 </View>
                 <View>
@@ -156,20 +181,37 @@ export default function SettingsScreen() {
             {/* Period Selector */}
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(5, 150, 105, 0.15)' }]}>
-                  <MaterialIcons name="calendar-today" size={20} color="#34d399" />
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(5, 150, 105, 0.15)" },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="calendar-today"
+                    size={20}
+                    color="#34d399"
+                  />
                 </View>
                 <Text style={styles.settingTitle}>Budget Period</Text>
               </View>
             </View>
             <View style={styles.periodSelector}>
-              {(['daily', 'weekly', 'monthly'] as BudgetPeriod[]).map((p) => (
+              {(["daily", "weekly", "monthly"] as BudgetPeriod[]).map((p) => (
                 <TouchableOpacity
                   key={p}
-                  style={[styles.periodPill, period === p && styles.periodPillActive]}
+                  style={[
+                    styles.periodPill,
+                    period === p && styles.periodPillActive,
+                  ]}
                   onPress={() => handlePeriodChange(p)}
                 >
-                  <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
+                  <Text
+                    style={[
+                      styles.periodText,
+                      period === p && styles.periodTextActive,
+                    ]}
+                  >
                     {p.charAt(0).toUpperCase() + p.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -177,19 +219,37 @@ export default function SettingsScreen() {
             </View>
 
             {/* Budget Amount */}
-            <TouchableOpacity style={styles.settingRow} onPress={handleBudgetChange}>
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={handleBudgetChange}
+            >
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(5, 150, 105, 0.15)' }]}>
-                  <MaterialIcons name="account-balance-wallet" size={20} color="#34d399" />
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(5, 150, 105, 0.15)" },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="account-balance-wallet"
+                    size={20}
+                    color="#34d399"
+                  />
                 </View>
                 <View>
-                  <Text style={styles.settingTitle}>{period.charAt(0).toUpperCase() + period.slice(1)} Budget</Text>
+                  <Text style={styles.settingTitle}>
+                    {period.charAt(0).toUpperCase() + period.slice(1)} Budget
+                  </Text>
                   <Text style={styles.settingSubtitle}>
-                    ₹{budget.toLocaleString('en-IN')}
+                    ₹{budget.toLocaleString("en-IN")}
                   </Text>
                 </View>
               </View>
-              <MaterialIcons name="chevron-right" size={24} color={Colors.slate500} />
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={Colors.slate500}
+              />
             </TouchableOpacity>
           </View>
 
@@ -201,7 +261,12 @@ export default function SettingsScreen() {
               onPress={() => setShowCategoryModal(true)}
             >
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(147, 51, 234, 0.15)' }]}>
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(147, 51, 234, 0.15)" },
+                  ]}
+                >
                   <MaterialIcons name="add-circle" size={20} color="#c084fc" />
                 </View>
                 <View>
@@ -211,7 +276,11 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               </View>
-              <MaterialIcons name="chevron-right" size={24} color={Colors.slate500} />
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={Colors.slate500}
+              />
             </TouchableOpacity>
 
             {customCategories.map((cat) => (
@@ -221,12 +290,25 @@ export default function SettingsScreen() {
                 onPress={() => handleDeleteCategory(cat.name)}
               >
                 <View style={styles.settingLeft}>
-                  <View style={[styles.settingIcon, { backgroundColor: `${cat.color}25` }]}>
-                    <MaterialIcons name={cat.icon as any} size={20} color={cat.color} />
+                  <View
+                    style={[
+                      styles.settingIcon,
+                      { backgroundColor: `${cat.color}25` },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={cat.icon as any}
+                      size={20}
+                      color={cat.color}
+                    />
                   </View>
                   <Text style={styles.settingTitle}>{cat.name}</Text>
                 </View>
-                <MaterialIcons name="delete-outline" size={20} color={Colors.slate500} />
+                <MaterialIcons
+                  name="delete-outline"
+                  size={20}
+                  color={Colors.slate500}
+                />
               </TouchableOpacity>
             ))}
           </View>
@@ -236,8 +318,17 @@ export default function SettingsScreen() {
           <View style={styles.settingsGroup}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(234, 88, 12, 0.15)' }]}>
-                  <MaterialIcons name="cloud-upload" size={20} color="#fb923c" />
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(234, 88, 12, 0.15)" },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="cloud-upload"
+                    size={20}
+                    color="#fb923c"
+                  />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Cloud Sync</Text>
@@ -253,13 +344,116 @@ export default function SettingsScreen() {
             </View>
           </View>
 
+          {/* Auto-Detect (Android only) */}
+          {Platform.OS === "android" && (
+            <>
+              <Text style={styles.sectionLabel}>AUTO-DETECT</Text>
+              <View style={styles.settingsGroup}>
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={async () => {
+                    const granted =
+                      await transactionDetector.isSmsPermissionGranted();
+                    if (!granted) {
+                      transactionDetector.requestSmsPermission();
+                    } else {
+                      showToast({
+                        type: "info",
+                        title: "SMS Permission",
+                        message: "Already granted",
+                      });
+                    }
+                  }}
+                >
+                  <View style={styles.settingLeft}>
+                    <View
+                      style={[
+                        styles.settingIcon,
+                        { backgroundColor: "rgba(16, 185, 129, 0.15)" },
+                      ]}
+                    >
+                      <MaterialIcons name="sms" size={20} color="#34d399" />
+                    </View>
+                    <View>
+                      <Text style={styles.settingTitle}>SMS Detection</Text>
+                      <Text style={styles.settingSubtitle}>
+                        Auto-read bank SMS
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={22}
+                    color={Colors.slate500}
+                  />
+                </TouchableOpacity>
+
+                <View style={styles.settingDivider} />
+
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={async () => {
+                    const enabled =
+                      await transactionDetector.isNotificationListenerEnabled();
+                    if (!enabled) {
+                      transactionDetector.openNotificationListenerSettings();
+                    } else {
+                      showToast({
+                        type: "info",
+                        title: "Notification Access",
+                        message: "Already enabled",
+                      });
+                    }
+                  }}
+                >
+                  <View style={styles.settingLeft}>
+                    <View
+                      style={[
+                        styles.settingIcon,
+                        { backgroundColor: "rgba(59, 130, 246, 0.15)" },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name="notifications-active"
+                        size={20}
+                        color="#60a5fa"
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.settingTitle}>
+                        Notification Access
+                      </Text>
+                      <Text style={styles.settingSubtitle}>
+                        Read GPay, PhonePe alerts
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={22}
+                    color={Colors.slate500}
+                  />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
           {/* About */}
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <View style={styles.settingsGroup}>
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
-                <View style={[styles.settingIcon, { backgroundColor: 'rgba(147, 51, 234, 0.15)' }]}>
-                  <MaterialIcons name="info-outline" size={20} color="#c084fc" />
+                <View
+                  style={[
+                    styles.settingIcon,
+                    { backgroundColor: "rgba(147, 51, 234, 0.15)" },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="info-outline"
+                    size={20}
+                    color="#c084fc"
+                  />
                 </View>
                 <View>
                   <Text style={styles.settingTitle}>Koin</Text>
@@ -305,11 +499,20 @@ export default function SettingsScreen() {
                   key={icon.name}
                   style={[
                     styles.iconOption,
-                    newCatIcon === icon.name && { borderColor: newCatColor, backgroundColor: `${newCatColor}20` },
+                    newCatIcon === icon.name && {
+                      borderColor: newCatColor,
+                      backgroundColor: `${newCatColor}20`,
+                    },
                   ]}
                   onPress={() => setNewCatIcon(icon.name)}
                 >
-                  <MaterialIcons name={icon.name as any} size={22} color={newCatIcon === icon.name ? newCatColor : Colors.slate400} />
+                  <MaterialIcons
+                    name={icon.name as any}
+                    size={22}
+                    color={
+                      newCatIcon === icon.name ? newCatColor : Colors.slate400
+                    }
+                  />
                 </TouchableOpacity>
               ))}
             </View>
@@ -332,13 +535,27 @@ export default function SettingsScreen() {
 
             {/* Preview */}
             <View style={styles.previewRow}>
-              <View style={[styles.previewIcon, { backgroundColor: `${newCatColor}30` }]}>
-                <MaterialIcons name={newCatIcon as any} size={24} color={newCatColor} />
+              <View
+                style={[
+                  styles.previewIcon,
+                  { backgroundColor: `${newCatColor}30` },
+                ]}
+              >
+                <MaterialIcons
+                  name={newCatIcon as any}
+                  size={24}
+                  color={newCatColor}
+                />
               </View>
-              <Text style={styles.previewName}>{newCatName || 'Category Name'}</Text>
+              <Text style={styles.previewName}>
+                {newCatName || "Category Name"}
+              </Text>
             </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleAddCategory}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleAddCategory}
+            >
               <Text style={styles.saveButtonText}>Add Category</Text>
             </TouchableOpacity>
           </View>
@@ -364,7 +581,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: Colors.slate100,
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.3,
   },
   content: {
@@ -374,7 +591,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   profileSection: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 24,
     gap: 8,
   },
@@ -385,19 +602,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.slate800,
     borderWidth: 3,
     borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 4,
   },
   avatarLargeText: {
     color: Colors.primary,
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   profileName: {
     color: Colors.slate100,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   profileEmail: {
     color: Colors.slate400,
@@ -406,7 +623,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: Colors.slate500,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1.5,
     paddingHorizontal: 24,
     marginTop: 24,
@@ -414,21 +631,26 @@ const styles = StyleSheet.create({
   },
   settingsGroup: {
     marginHorizontal: 24,
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    backgroundColor: "rgba(30, 41, 59, 0.4)",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
-    overflow: 'hidden',
+    borderColor: "rgba(30, 41, 59, 0.8)",
+    overflow: "hidden",
   },
   settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
   },
+  settingDivider: {
+    height: 1,
+    backgroundColor: "rgba(100, 116, 139, 0.15)",
+    marginHorizontal: 16,
+  },
   settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
@@ -436,13 +658,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   settingTitle: {
     color: Colors.slate100,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   settingSubtitle: {
     color: Colors.slate400,
@@ -450,7 +672,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   periodSelector: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     paddingHorizontal: 16,
     paddingBottom: 12,
@@ -459,18 +681,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
-    alignItems: 'center',
+    backgroundColor: "rgba(30, 41, 59, 0.6)",
+    alignItems: "center",
   },
   periodPillActive: {
-    backgroundColor: 'rgba(19, 127, 236, 0.2)',
+    backgroundColor: "rgba(19, 127, 236, 0.2)",
     borderWidth: 1,
     borderColor: Colors.primary,
   },
   periodText: {
     color: Colors.slate400,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   periodTextActive: {
     color: Colors.primary,
@@ -478,8 +700,8 @@ const styles = StyleSheet.create({
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: Colors.backgroundDark,
@@ -487,40 +709,40 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     borderTopWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
+    borderColor: "rgba(30, 41, 59, 0.8)",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   modalTitle: {
     color: Colors.slate100,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   modalInput: {
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
     borderRadius: 12,
     padding: 14,
     color: Colors.slate100,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
+    borderColor: "rgba(30, 41, 59, 0.8)",
     marginBottom: 16,
   },
   modalLabel: {
     color: Colors.slate400,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 1,
     marginBottom: 10,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 16,
   },
@@ -528,14 +750,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   colorGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 20,
   },
@@ -544,18 +766,18 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 3,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   colorOptionActive: {
     borderColor: Colors.white,
     transform: [{ scale: 1.15 }],
   },
   previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     padding: 14,
-    backgroundColor: 'rgba(30, 41, 59, 0.3)',
+    backgroundColor: "rgba(30, 41, 59, 0.3)",
     borderRadius: 12,
     marginBottom: 20,
   },
@@ -563,24 +785,24 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   previewName: {
     color: Colors.slate100,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   saveButton: {
     backgroundColor: Colors.primary,
     height: 52,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   saveButtonText: {
     color: Colors.white,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

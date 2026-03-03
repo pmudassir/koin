@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,15 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  RefreshControl
-} from 'react-native';
-import { showToast } from '../components/Toast';
-import { showConfirm } from '../components/Toast';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Colors } from '../theme';
-import { Transaction } from '../models/Transaction';
+  RefreshControl,
+} from "react-native";
+import { showToast } from "../components/Toast";
+import { showConfirm } from "../components/Toast";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Colors } from "../theme";
+import { Transaction } from "../models/Transaction";
 import {
   getTransactionsForDay,
   getTodayTotal,
@@ -24,17 +24,27 @@ import {
   getPeriodTotal,
   getWeeklyTotal,
   getMonthlyTotal,
-} from '../storage/transactionStorage';
-import TransactionItem from '../components/TransactionItem';
-import BudgetCard from '../components/BudgetCard';
-import { setupShareListener } from '../services/shareExtensionBridge';
+  addTransaction,
+} from "../storage/transactionStorage";
+import TransactionItem from "../components/TransactionItem";
+import BudgetCard from "../components/BudgetCard";
+import { setupShareListener } from "../services/shareExtensionBridge";
+import {
+  transactionDetector,
+  DetectedTransaction,
+} from "../services/transactionDetector";
+import { smartCategorize } from "../services/smartCategorizer";
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const [periodTotal, setPeriodTotal] = useState(0);
   const [budget, setBudget] = useState(2500);
-  const [budgetPeriod, setBudgetPeriodState] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [budgetPeriod, setBudgetPeriodState] = useState<
+    "daily" | "weekly" | "monthly"
+  >("daily");
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
+    [],
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(() => {
@@ -48,7 +58,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+    }, [loadData]),
   );
 
   // Listen for share extension data when app comes to foreground
@@ -56,12 +66,42 @@ export default function HomeScreen() {
     const cleanup = setupShareListener(() => {
       loadData();
       showToast({
-        type: 'success',
-        title: 'Transaction Added',
-        message: 'A shared transaction was automatically added.',
+        type: "success",
+        title: "Transaction Added",
+        message: "A shared transaction was automatically added.",
       });
     });
     return cleanup;
+  }, [loadData]);
+
+  // Android: Listen for auto-detected SMS/notification transactions
+  useEffect(() => {
+    if (!transactionDetector.isAvailable()) return;
+
+    transactionDetector.startListening((detected: DetectedTransaction) => {
+      // Auto-categorize the detected transaction
+      const result = smartCategorize(detected.merchant, detected.smsBody || "");
+
+      // Save the transaction
+      addTransaction({
+        amount: detected.amount,
+        merchant: detected.merchant,
+        category: result.category,
+        note: `Auto-detected from ${detected.source}: ${detected.sender}`,
+        isAutoDetected: true,
+      });
+
+      loadData();
+      showToast({
+        type: "success",
+        title: "Transaction Auto-Added",
+        message: `${detected.merchant} — ₹${detected.amount.toLocaleString("en-IN")}`,
+      });
+    });
+
+    return () => {
+      transactionDetector.stopListening();
+    };
   }, [loadData]);
 
   const onRefresh = useCallback(() => {
@@ -72,9 +112,9 @@ export default function HomeScreen() {
 
   const handleDelete = (txn: Transaction) => {
     showConfirm({
-      title: 'Delete Transaction',
-      message: `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString('en-IN')}?`,
-      confirmLabel: 'Delete',
+      title: "Delete Transaction",
+      message: `Delete "${txn.merchant}" — ₹${txn.amount.toLocaleString("en-IN")}?`,
+      confirmLabel: "Delete",
       destructive: true,
       onConfirm: () => {
         deleteTransaction(txn.id);
@@ -84,16 +124,25 @@ export default function HomeScreen() {
   };
 
   const handleEdit = (txn: Transaction) => {
-    navigation.navigate('AddExpense', { transaction: txn });
+    navigation.navigate("AddExpense", { transaction: txn });
   };
 
-  const periodLabel = budgetPeriod === 'daily' ? 'Today' : budgetPeriod === 'weekly' ? 'This Week' : 'This Month';
-  const budgetLabel = budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1) + ' Budget';
+  const periodLabel =
+    budgetPeriod === "daily"
+      ? "Today"
+      : budgetPeriod === "weekly"
+        ? "This Week"
+        : "This Month";
+  const budgetLabel =
+    budgetPeriod.charAt(0).toUpperCase() + budgetPeriod.slice(1) + " Budget";
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.backgroundDark} />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={Colors.backgroundDark}
+      />
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -106,7 +155,11 @@ export default function HomeScreen() {
             </View>
           </View>
           <TouchableOpacity style={styles.notifButton}>
-            <MaterialIcons name="notifications-none" size={24} color={Colors.slate300} />
+            <MaterialIcons
+              name="notifications-none"
+              size={24}
+              color={Colors.slate300}
+            />
           </TouchableOpacity>
         </View>
 
@@ -126,28 +179,43 @@ export default function HomeScreen() {
           <View style={styles.totalSection}>
             <Text style={styles.totalLabel}>Total Spent {periodLabel}</Text>
             <Text style={styles.totalAmount}>
-              ₹{periodTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹
+              {periodTotal.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+              })}
             </Text>
           </View>
 
           {/* Budget Card */}
           <View style={styles.budgetSection}>
-            <BudgetCard budget={budget} spent={periodTotal} label={budgetLabel} />
+            <BudgetCard
+              budget={budget}
+              spent={periodTotal}
+              label={budgetLabel}
+            />
           </View>
 
           {/* Recent Transactions */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AllTransactions')}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("AllTransactions")}
+            >
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
 
           {recentTransactions.length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialIcons name="receipt-long" size={48} color={Colors.slate700} />
+              <MaterialIcons
+                name="receipt-long"
+                size={48}
+                color={Colors.slate700}
+              />
               <Text style={styles.emptyText}>No transactions today</Text>
-              <Text style={styles.emptySubtext}>Tap + to add your first expense</Text>
+              <Text style={styles.emptySubtext}>
+                Tap + to add your first expense
+              </Text>
             </View>
           ) : (
             <View style={styles.txnList}>
@@ -178,16 +246,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 16,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   avatar: {
@@ -196,24 +264,24 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: Colors.slate800,
     borderWidth: 2,
-    borderColor: 'rgba(19, 127, 236, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(19, 127, 236, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     color: Colors.primary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   welcomeText: {
     color: Colors.slate400,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   dateText: {
     color: Colors.slate100,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.3,
   },
   notifButton: {
@@ -221,8 +289,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: Colors.slate800,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   content: {
     flex: 1,
@@ -237,48 +305,48 @@ const styles = StyleSheet.create({
   totalLabel: {
     color: Colors.slate400,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 4,
   },
   totalAmount: {
     color: Colors.slate100,
     fontSize: 40,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -1,
   },
   budgetSection: {
     marginBottom: 24,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 16,
   },
   sectionTitle: {
     color: Colors.slate100,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -0.2,
   },
   seeAll: {
     color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   txnList: {
     gap: 12,
   },
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 48,
     gap: 8,
   },
   emptyText: {
     color: Colors.slate400,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptySubtext: {
     color: Colors.slate500,
