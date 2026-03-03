@@ -17,7 +17,9 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["koin"]
+            "CFBundleURLSchemes": [
+              "koin"
+            ]
           }
         ]
       }
@@ -33,6 +35,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "08d86ddd-ce27-4c89-a8a6-6d817604836e"
+      }
+    },
+    "owner": "mudassirmhd"
   }
 }
