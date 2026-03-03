@@ -13,7 +13,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.mudassirmhd.koin"
+      "bundleIdentifier": "com.mudassirmhd.koin",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["koin"]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {

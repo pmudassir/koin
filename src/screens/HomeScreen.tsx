@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
 } from '../storage/transactionStorage';
 import TransactionItem from '../components/TransactionItem';
 import BudgetCard from '../components/BudgetCard';
+import { setupShareListener } from '../services/shareExtensionBridge';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
@@ -48,6 +49,19 @@ export default function HomeScreen() {
       loadData();
     }, [loadData])
   );
+
+  // Listen for share extension data when app comes to foreground
+  useEffect(() => {
+    const cleanup = setupShareListener(() => {
+      loadData();
+      Alert.alert(
+        '✅ Transaction Added',
+        'A shared transaction was automatically added.',
+        [{ text: 'OK' }]
+      );
+    });
+    return cleanup;
+  }, [loadData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

@@ -11,7 +11,7 @@ interface Props {
 export default function BudgetCard({ budget, spent, label = 'Daily Budget' }: Props) {
   const percentage = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const isOverBudget = spent > budget;
-  const remaining = Math.max(budget - spent, 0);
+  const remaining = budget - spent;
 
   return (
     <View style={styles.container}>
@@ -22,8 +22,8 @@ export default function BudgetCard({ budget, spent, label = 'Daily Budget' }: Pr
         )}
       </View>
       <View style={styles.amountRow}>
-        <Text style={styles.amount}>
-          ₹{remaining.toLocaleString('en-IN')}
+        <Text style={[styles.amount, isOverBudget && styles.overBudgetAmount]}>
+          {isOverBudget ? '-' : ''}₹{Math.abs(remaining).toLocaleString('en-IN')}
         </Text>
         <Text style={styles.totalBudget}>
           / ₹{budget.toLocaleString('en-IN')}
@@ -78,6 +78,9 @@ const styles = StyleSheet.create({
     color: Colors.slate100,
     fontSize: 22,
     fontWeight: '700',
+  },
+  overBudgetAmount: {
+    color: '#ef4444',
   },
   totalBudget: {
     color: Colors.slate500,

@@ -248,8 +248,17 @@ export default function AppNavigator() {
     return <LockScreen onUnlock={handleUnlock} />;
   }
 
+  const linking = {
+    prefixes: ['koin://'],
+    config: {
+      screens: {
+        MainTabs: 'main',
+      },
+    },
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
