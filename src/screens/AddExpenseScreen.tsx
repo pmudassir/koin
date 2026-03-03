@@ -127,7 +127,7 @@ export default function AddExpenseScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity

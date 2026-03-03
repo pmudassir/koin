@@ -129,7 +129,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Settings</Text>
         </View>
@@ -351,16 +351,19 @@ export default function SettingsScreen() {
               <View style={styles.settingsGroup}>
                 <TouchableOpacity
                   style={styles.settingRow}
-                  onPress={async () => {
-                    const granted =
-                      await transactionDetector.isSmsPermissionGranted();
-                    if (!granted) {
+                  onPress={() => {
+                    try {
                       transactionDetector.requestSmsPermission();
-                    } else {
                       showToast({
                         type: "info",
                         title: "SMS Permission",
-                        message: "Already granted",
+                        message: "Check the permission dialog",
+                      });
+                    } catch (e) {
+                      showToast({
+                        type: "error",
+                        title: "Error",
+                        message: "Could not request SMS permission",
                       });
                     }
                   }}
@@ -392,16 +395,19 @@ export default function SettingsScreen() {
 
                 <TouchableOpacity
                   style={styles.settingRow}
-                  onPress={async () => {
-                    const enabled =
-                      await transactionDetector.isNotificationListenerEnabled();
-                    if (!enabled) {
+                  onPress={() => {
+                    try {
                       transactionDetector.openNotificationListenerSettings();
-                    } else {
                       showToast({
                         type: "info",
                         title: "Notification Access",
-                        message: "Already enabled",
+                        message: "Enable Koin in the list",
+                      });
+                    } catch (e) {
+                      showToast({
+                        type: "error",
+                        title: "Error",
+                        message: "Could not open notification settings",
                       });
                     }
                   }}

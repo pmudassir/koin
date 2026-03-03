@@ -3,12 +3,15 @@ import {
   AppStateStatus,
   Platform,
   Linking,
+  NativeModules,
 } from "react-native";
 import { showToast } from "../components/Toast";
 import * as Clipboard from "expo-clipboard";
 import { addTransaction } from "../storage/transactionStorage";
 import { smartCategorize } from "./smartCategorizer";
 import { Category } from "../models/Transaction";
+
+const { ShareIntentModule } = NativeModules;
 
 interface SharedTransactionData {
   koin_share: boolean;
@@ -141,31 +144,139 @@ function handleIncomingURL(url: string | null): boolean {
 }
 
 /**
- * Setup both URL scheme and clipboard listeners
+ * Check for Android share intent data
+ */
+async function checkAndroidShareIntent(): Promise<boolean> {
+  if (Platform.OS !== "android" || !ShareIntentModule) return false;
+
+  try {
+    const sharedData = await ShareIntentModule.getSharedData();
+    if (!sharedData) return false;
+
+    console.log("📱 Received Android share intent:", sharedData.type);
+
+    if (sharedData.type === "text") {
+      // Try to parse the text for transaction data
+      const text = sharedData.text || "";
+      const subject = sharedData.subject || "";
+      const fullText = `${subject}\n${text}`;
+
+      const result = smartCategorize("Shared Transaction", fullText);
+
+      // Try to extract amount from text
+      const amountMatch = fullText.match(
+        /(?:Rs\.?|INR|₹)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+      );
+      const amount = amountMatch
+        ? parseFloat(amountMatch[1].replace(/,/g, ""))
+        : 0;
+
+      // Try to extract merchant
+      const merchantMatch = fullText.match(
+        /(?:to|paid to|sent to)\s+([A-Za-z][A-Za-z\s.\-&']{1,40})/i,
+      );
+      const merchant = merchantMatch
+        ? merchantMatch[1].trim()
+        : "Shared Transaction";
+
+      const data: SharedTransactionData = {
+        koin_share: true,
+        amount,
+        merchant,
+        note: text,
+        ocrText: fullText,
+        timestamp: Date.now(),
+      };
+
+      return createTransactionFromShare(data);
+    } else if (sharedData.type === "image") {
+      // OCR was performed natively via ML Kit
+      const ocrText = sharedData.ocrText || "";
+      const amount = sharedData.amount || 0;
+      const merchant = sharedData.merchant || "Shared Transaction";
+
+      if (amount <= 0 && !ocrText) return false;
+
+      const data: SharedTransactionData = {
+        koin_share: true,
+        amount,
+        merchant,
+        note: `OCR: ${ocrText.substring(0, 200)}`,
+        ocrText,
+        timestamp: Date.now(),
+      };
+
+      return createTransactionFromShare(data);
+    }
+  } catch (e) {
+    console.warn("Android share intent error:", e);
+  }
+  return false;
+}
+
+/**
+ * Setup share listeners for both iOS and Android
  */
 export function setupShareListener(onNewTransaction: () => void): () => void {
-  if (Platform.OS !== "ios") return () => {};
+  // ── Android share intent handling ──
+  if (Platform.OS === "android") {
+    // Check immediately on mount (app opened via share)
+    setTimeout(async () => {
+      const found = await checkAndroidShareIntent();
+      if (found) {
+        onNewTransaction();
+        showToast({
+          type: "success",
+          title: "Transaction Added",
+          message: "Transaction added from share.",
+        });
+      }
+    }, 500);
+
+    // Re-check when app becomes foreground
+    const appStateSub = AppState.addEventListener(
+      "change",
+      async (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          setTimeout(async () => {
+            const found = await checkAndroidShareIntent();
+            if (found) {
+              onNewTransaction();
+              showToast({
+                type: "success",
+                title: "Transaction Added",
+                message: "Transaction added from share.",
+              });
+            }
+          }, 500);
+        }
+      },
+    );
+
+    return () => {
+      appStateSub.remove();
+    };
+  }
+
+  // ── iOS handling (URL scheme + clipboard) ──
 
   // 1. Handle URL scheme (when Share Extension opens main app)
   const handleURL = ({ url }: { url: string }) => {
-    // Ignore expo development client URLs
     if (url.includes("expo-development-client")) return;
 
     const created = handleIncomingURL(url);
     if (created) {
       onNewTransaction();
       showToast({
-        type: 'success',
-        title: 'Transaction Added',
-        message: 'Transaction was added from the share.',
+        type: "success",
+        title: "Transaction Added",
+        message: "Transaction was added from the share.",
       });
     }
   };
 
-  // Listen for incoming URLs
   const linkingSub = Linking.addEventListener("url", handleURL);
 
-  // Check if app was opened via URL
   Linking.getInitialURL().then((url) => {
     if (url && !url.includes("expo-development-client")) {
       const created = handleIncomingURL(url);
@@ -173,18 +284,17 @@ export function setupShareListener(onNewTransaction: () => void): () => void {
     }
   });
 
-  // 2. Check clipboard on foreground (fallback if URL scheme didn't work)
+  // 2. Check clipboard on foreground
   const handleAppStateChange = async (nextState: AppStateStatus) => {
     if (nextState === "active") {
-      // Small delay to let clipboard sync
       setTimeout(async () => {
         const found = await checkClipboard();
         if (found) {
           onNewTransaction();
           showToast({
-            type: 'success',
-            title: 'Transaction Added',
-            message: 'Transaction was added from the share.',
+            type: "success",
+            title: "Transaction Added",
+            message: "Transaction was added from the share.",
           });
         }
       }, 500);
