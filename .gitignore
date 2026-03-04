@@ -39,5 +39,13 @@ yarn-error.*
 
 # generated native folders
 /ios
-/android
 /stitch
+
+# android build artifacts (keep source, ignore outputs)
+/android/build/
+/android/app/build/
+/android/.gradle/
+/android/.kotlin/
+/android/.idea/
+/android/local.properties
+/android/app/.cxx/

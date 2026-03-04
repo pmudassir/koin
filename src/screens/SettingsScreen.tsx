@@ -370,18 +370,22 @@ export default function SettingsScreen() {
                           message: "Permission granted! Bank SMS will be auto-detected.",
                         });
                       } else {
-                        showToast({
-                          type: "info",
-                          title: "SMS Permission",
-                          message: "Permission denied. You can enable it in Settings.",
-                        });
+                        // Permission denied or never_ask_again — open app settings
+                        Alert.alert(
+                          "SMS Permission Required",
+                          "Please enable SMS permission in app settings to auto-detect bank transactions.",
+                          [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Open Settings",
+                              onPress: () => Linking.openSettings(),
+                            },
+                          ]
+                        );
                       }
                     } catch (e) {
-                      showToast({
-                        type: "error",
-                        title: "Error",
-                        message: "Could not request SMS permission.",
-                      });
+                      // Fallback: open app settings directly
+                      Linking.openSettings();
                     }
                   }}
                 >
@@ -413,14 +417,25 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                   style={styles.settingRow}
                   onPress={() => {
-                    try {
-                      Linking.sendIntent(
-                        "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
-                      );
-                    } catch (e) {
-                      // Fallback: open general app settings
-                      Linking.openSettings();
-                    }
+                    Alert.alert(
+                      "Notification Access",
+                      "You'll be taken to notification access settings. Find \"Koin\" in the list and enable it to auto-detect payment notifications.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Open Settings",
+                          onPress: async () => {
+                            try {
+                              await Linking.sendIntent(
+                                "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
+                              );
+                            } catch (e) {
+                              Linking.openSettings();
+                            }
+                          },
+                        },
+                      ]
+                    );
                   }}
                 >
                   <View style={styles.settingLeft}>
