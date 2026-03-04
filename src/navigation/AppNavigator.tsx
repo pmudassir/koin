@@ -14,7 +14,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme';
-import { isBiometricsEnabled, authenticateWithBiometrics } from '../services/security';
+import { isBiometricsEnabled, isBiometricsAvailable, authenticateWithBiometrics } from '../services/security';
 import { ToastProvider, ConfirmDialog } from '../components/Toast';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -226,18 +226,27 @@ export default function AppNavigator() {
   };
 
   useEffect(() => {
-    if (isLoggedIn && isBiometricsEnabled()) {
-      setIsLocked(true);
-    }
-    setInitialCheckDone(true);
+    const checkLock = async () => {
+      if (isLoggedIn && isBiometricsEnabled()) {
+        const available = await isBiometricsAvailable();
+        if (available) {
+          setIsLocked(true);
+        }
+      }
+      setInitialCheckDone(true);
+    };
+    checkLock();
 
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       const wasBackground = appState.current === 'background';
       const isNowActive = nextAppState === 'active';
       const cooldownPassed = Date.now() - lastUnlockTime.current > 3000;
 
       if (wasBackground && isNowActive && isBiometricsEnabled() && cooldownPassed) {
-        setIsLocked(true);
+        const available = await isBiometricsAvailable();
+        if (available) {
+          setIsLocked(true);
+        }
       }
       appState.current = nextAppState;
     });
