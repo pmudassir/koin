@@ -102,7 +102,7 @@ function createTransactionFromShare(data: SharedTransactionData): boolean {
 
   lastProcessedTimestamp = data.timestamp || Date.now();
   console.log(
-    `✅ Smart categorized: ${data.merchant} → ${result.category} (${result.confidence}, ${result.source})`,
+    `[Share] Smart categorized: ${data.merchant} -> ${result.category} (${result.confidence}, ${result.source})`,
   );
   return true;
 }
@@ -153,7 +153,7 @@ async function checkAndroidShareIntent(): Promise<boolean> {
     const sharedData = await ShareIntentModule.getSharedData();
     if (!sharedData) return false;
 
-    console.log("📱 Received Android share intent:", sharedData.type);
+    console.log("[Share] Received Android share intent:", sharedData.type);
 
     if (sharedData.type === "text") {
       // Try to parse the text for transaction data

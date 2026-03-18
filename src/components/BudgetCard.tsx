@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../theme';
+import { Colors, Elevation } from '../theme';
 
 interface Props {
   budget: number;
@@ -15,30 +15,41 @@ export default function BudgetCard({ budget, spent, label = 'Daily Budget' }: Pr
 
   return (
     <View style={styles.container}>
-      <View style={styles.topRow}>
-        <Text style={styles.label}>{label.toUpperCase()}</Text>
-        {isOverBudget && (
-          <Text style={styles.overBudget}>Over budget!</Text>
-        )}
-      </View>
-      <View style={styles.amountRow}>
-        <Text style={[styles.amount, isOverBudget && styles.overBudgetAmount]}>
-          {isOverBudget ? '-' : ''}₹{Math.abs(remaining).toLocaleString('en-IN')}
-        </Text>
-        <Text style={styles.totalBudget}>
-          / ₹{budget.toLocaleString('en-IN')}
-        </Text>
-      </View>
-      <View style={styles.barBg}>
-        <View
-          style={[
-            styles.barFill,
-            {
-              width: `${percentage}%`,
-              backgroundColor: isOverBudget ? '#ef4444' : percentage > 80 ? '#f59e0b' : Colors.primary,
-            },
-          ]}
-        />
+      {/* Violet left accent bar */}
+      <View style={[
+        styles.accentBar,
+        isOverBudget && styles.accentBarOver,
+      ]} />
+      <View style={styles.inner}>
+        <View style={styles.topRow}>
+          <Text style={styles.label}>{label.toUpperCase()}</Text>
+          {isOverBudget && (
+            <Text style={styles.overBudget}>Over budget!</Text>
+          )}
+        </View>
+        <View style={styles.amountRow}>
+          <Text style={[styles.amount, isOverBudget && styles.overBudgetAmount]}>
+            {isOverBudget ? '-' : ''}₹{Math.abs(remaining).toLocaleString('en-IN')}
+          </Text>
+          <Text style={styles.totalBudget}>
+            / ₹{budget.toLocaleString('en-IN')}
+          </Text>
+        </View>
+        <View style={styles.barBg}>
+          <View
+            style={[
+              styles.barFill,
+              {
+                width: `${percentage}%`,
+                backgroundColor: isOverBudget
+                  ? Colors.expense
+                  : percentage > 80
+                    ? Colors.warning
+                    : Colors.primary,
+              },
+            ]}
+          />
+        </View>
       </View>
     </View>
   );
@@ -46,11 +57,24 @@ export default function BudgetCard({ budget, spent, label = 'Daily Budget' }: Pr
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(19, 127, 236, 0.08)',
+    backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 16,
+    flexDirection: 'row',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(19, 127, 236, 0.15)',
+    borderColor: Colors.borderSubtle,
+    ...Elevation.elevation2,
+  },
+  accentBar: {
+    width: 4,
+    backgroundColor: Colors.primary,
+  },
+  accentBarOver: {
+    backgroundColor: Colors.expense,
+  },
+  inner: {
+    flex: 1,
+    padding: 16,
   },
   topRow: {
     flexDirection: 'row',
@@ -58,13 +82,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    color: Colors.primary,
+    color: Colors.textTertiary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1,
   },
   overBudget: {
-    color: '#ef4444',
+    color: Colors.expense,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -75,21 +99,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   amount: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 22,
     fontWeight: '700',
   },
   overBudgetAmount: {
-    color: '#ef4444',
+    color: Colors.expense,
   },
   totalBudget: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 14,
     fontWeight: '500',
   },
   barBg: {
     height: 6,
-    backgroundColor: Colors.slate700,
+    backgroundColor: Colors.borderSubtle,
     borderRadius: 3,
     marginTop: 12,
     overflow: 'hidden',

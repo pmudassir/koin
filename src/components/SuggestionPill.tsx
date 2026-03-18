@@ -1,19 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors } from '../theme';
+import { Colors, Elevation } from '../theme';
 import { Suggestion } from '../services/suggestions';
 
-const SUGGESTION_ICON_MAP: Record<string, { icon: keyof typeof MaterialIcons.glyphMap; bg: string; text: string }> = {
-  Food: { icon: 'restaurant', bg: 'rgba(234, 88, 12, 0.2)', text: '#fb923c' },
-  Transport: { icon: 'directions-car', bg: 'rgba(37, 99, 235, 0.2)', text: '#60a5fa' },
-  Groceries: { icon: 'shopping-cart', bg: 'rgba(5, 150, 105, 0.2)', text: '#34d399' },
-  Bills: { icon: 'receipt-long', bg: 'rgba(5, 150, 105, 0.2)', text: '#34d399' },
-  Shopping: { icon: 'shopping-bag', bg: 'rgba(147, 51, 234, 0.2)', text: '#c084fc' },
-  Health: { icon: 'favorite', bg: 'rgba(220, 38, 38, 0.2)', text: '#f87171' },
-  Others: { icon: 'more-horiz', bg: 'rgba(100, 116, 139, 0.2)', text: '#94a3b8' },
-  Transfer: { icon: 'swap-horiz', bg: 'rgba(6, 182, 212, 0.2)', text: '#22d3ee' },
-  Entertainment: { icon: 'movie', bg: 'rgba(219, 39, 119, 0.2)', text: '#f472b6' },
+// Opaque Tailwind 100-shade backgrounds + 600-shade icons for light theme
+const SUGGESTION_ICON_MAP: Record<string, { icon: keyof typeof MaterialIcons.glyphMap; bg: string; text: string; border: string }> = {
+  Food: { icon: 'restaurant', bg: '#FFEDD5', text: '#EA580C', border: '#FED7AA' },
+  Transport: { icon: 'directions-car', bg: '#DBEAFE', text: '#2563EB', border: '#BFDBFE' },
+  Groceries: { icon: 'shopping-cart', bg: '#FEF9C3', text: '#CA8A04', border: '#FEF08A' },
+  Bills: { icon: 'receipt-long', bg: '#DCFCE7', text: '#16A34A', border: '#BBF7D0' },
+  Shopping: { icon: 'shopping-bag', bg: '#F3E8FF', text: '#9333EA', border: '#E9D5FF' },
+  Health: { icon: 'favorite', bg: '#FEE2E2', text: '#DC2626', border: '#FECACA' },
+  Others: { icon: 'more-horiz', bg: '#F1F5F9', text: '#64748B', border: '#E2E8F0' },
+  Transfer: { icon: 'swap-horiz', bg: '#CFFAFE', text: '#0891B2', border: '#A5F3FC' },
+  Entertainment: { icon: 'movie', bg: '#FDF4FF', text: '#C026D3', border: '#F5D0FE' },
 };
 
 interface Props {
@@ -28,14 +29,14 @@ export function SuggestionPill({ suggestion, onPress, variant = 'pill' }: Props)
   if (variant === 'card') {
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: style.bg, borderColor: `${style.text}30` }]}
+        style={[styles.card, { backgroundColor: style.bg, borderColor: style.border }]}
         activeOpacity={0.7}
         onPress={() => onPress(suggestion)}
       >
         <MaterialIcons name={style.icon} size={22} color={style.text} />
         <View>
           <Text style={styles.cardMerchant}>{suggestion.merchant}</Text>
-          <Text style={[styles.cardAmount, { color: Colors.slate400 }]}>
+          <Text style={styles.cardAmount}>
             Avg. ₹{suggestion.amount.toLocaleString('en-IN')}
           </Text>
         </View>
@@ -45,14 +46,14 @@ export function SuggestionPill({ suggestion, onPress, variant = 'pill' }: Props)
 
   return (
     <TouchableOpacity
-      style={[styles.pill, { backgroundColor: style.bg, borderColor: `${style.text}30` }]}
+      style={[styles.pill, { backgroundColor: style.bg, borderColor: style.border }]}
       activeOpacity={0.7}
       onPress={() => onPress(suggestion)}
     >
       <MaterialIcons name={style.icon} size={18} color={style.text} />
       <View>
         <Text style={styles.pillMerchant}>{suggestion.merchant}</Text>
-        <Text style={[styles.pillAmount, { color: `${style.text}CC` }]}>
+        <Text style={[styles.pillAmount, { color: style.text }]}>
           ₹{suggestion.amount.toLocaleString('en-IN')}
         </Text>
       </View>
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pillMerchant: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 18,
@@ -87,13 +88,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
+    ...Elevation.elevation1,
   },
   cardMerchant: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   cardAmount: {
+    color: Colors.textSecondary,
     fontSize: 12,
   },
 });

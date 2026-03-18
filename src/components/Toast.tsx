@@ -25,27 +25,27 @@ interface ToastConfig {
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; iconName: keyof typeof MaterialIcons.glyphMap }> = {
   success: {
-    bg: "rgba(13, 30, 26, 0.97)",
-    border: "rgba(16, 185, 129, 0.35)",
-    icon: "#10b981",
+    bg: "#ECFDF5",
+    border: "#A7F3D0",
+    icon: "#059669",
     iconName: "check-circle",
   },
   error: {
-    bg: "rgba(30, 13, 13, 0.97)",
-    border: "rgba(239, 68, 68, 0.35)",
-    icon: "#ef4444",
+    bg: "#FEF2F2",
+    border: "#FECACA",
+    icon: "#DC2626",
     iconName: "error",
   },
   warning: {
-    bg: "rgba(30, 24, 10, 0.97)",
-    border: "rgba(245, 158, 11, 0.35)",
-    icon: "#f59e0b",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    icon: "#D97706",
     iconName: "warning",
   },
   info: {
-    bg: "rgba(12, 20, 35, 0.97)",
-    border: "rgba(59, 130, 246, 0.35)",
-    icon: "#3b82f6",
+    bg: "#EFF6FF",
+    border: "#BFDBFE",
+    icon: "#2563EB",
     iconName: "info",
   },
 };
@@ -150,6 +150,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   },
                 ]}
               >
+                <View style={[styles.accentBar, { backgroundColor: colors.icon }]} />
                 <View style={styles.iconContainer}>
                   <MaterialIcons name={colors.iconName} size={22} color={colors.icon} />
                 </View>
@@ -175,7 +176,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity onPress={hide} hitSlop={8}>
-                    <MaterialIcons name="close" size={18} color={Colors.slate500} />
+                    <MaterialIcons name="close" size={18} color={Colors.textTertiary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -327,15 +328,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingRight: 16,
+    paddingLeft: 12,
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
+  },
+  accentBar: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
   iconContainer: {
     width: 36,
@@ -343,19 +355,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Colors.surface,
   },
   textContainer: {
     flex: 1,
     gap: 2,
   },
   title: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: "700",
   },
   message: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 12,
     lineHeight: 16,
   },
@@ -363,7 +375,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Colors.surface,
   },
   actionText: {
     fontSize: 13,
@@ -373,7 +385,7 @@ const styles = StyleSheet.create({
   // Confirm Dialog
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 9999,
@@ -381,15 +393,15 @@ const styles = StyleSheet.create({
   },
   dialog: {
     width: SCREEN_WIDTH - 64,
-    backgroundColor: "#1e293b",
+    backgroundColor: Colors.surface,
     borderRadius: 24,
     padding: 28,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.5)",
-    shadowColor: "#000",
+    borderColor: Colors.borderSubtle,
+    shadowColor: Colors.shadowColor,
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 12,
   },
@@ -397,20 +409,20 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Colors.canvas,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
   dialogTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
   },
   dialogMessage: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -425,12 +437,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 14,
-    backgroundColor: "rgba(51, 65, 85, 0.5)",
+    backgroundColor: Colors.canvas,
     alignItems: "center",
     justifyContent: "center",
   },
   dialogCancelText: {
-    color: Colors.slate300,
+    color: Colors.textSecondary,
     fontSize: 15,
     fontWeight: "600",
   },
@@ -443,14 +455,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dialogDestructiveBtn: {
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    backgroundColor: Colors.expenseBg,
   },
   dialogConfirmText: {
-    color: "#fff",
+    color: Colors.white,
     fontSize: 15,
     fontWeight: "700",
   },
   dialogDestructiveText: {
-    color: "#ef4444",
+    color: Colors.expense,
   },
 });

@@ -77,6 +77,20 @@ export function getAmountPatterns(): Map<string, number> {
   return patterns;
 }
 
+/** Get average amount for a specific merchant (case-insensitive) */
+export function getAmountForMerchant(merchant: string): number | null {
+  const patterns = getAmountPatterns();
+  // Try exact match first
+  const exact = patterns.get(merchant);
+  if (exact) return exact;
+  // Try case-insensitive
+  const lower = merchant.toLowerCase();
+  for (const [key, value] of patterns) {
+    if (key.toLowerCase() === lower) return value;
+  }
+  return null;
+}
+
 /** Time-of-day based suggestions */
 export function getTimeSuggestions(): Suggestion[] {
   const transactions = getTransactions();

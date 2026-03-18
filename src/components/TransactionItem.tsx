@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,22 @@ import {
   Animated,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { Transaction, CATEGORY_COLORS, Category } from '../models/Transaction';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors } from '../theme';
-import { getCustomCategories } from '../storage/categoryStorage';
+import { Colors, Elevation } from '../theme';
+import { getCustomCategories, CustomCategory, onCustomCategoriesChange } from '../storage/categoryStorage';
+
+// Module-level cache to avoid repeated MMKV reads on every render
+let _cachedCustomCategories: CustomCategory[] | null = null;
+function getCachedCustomCategories(): CustomCategory[] {
+  if (!_cachedCustomCategories) {
+    _cachedCustomCategories = getCustomCategories();
+  }
+  return _cachedCustomCategories;
+}
+// Auto-invalidate when categories change
+onCustomCategoriesChange(() => { _cachedCustomCategories = null; });
 
 const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   Food: 'restaurant',
@@ -26,7 +38,7 @@ const ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
 
 function getCategoryIcon(category: string): keyof typeof MaterialIcons.glyphMap {
   if (ICON_MAP[category]) return ICON_MAP[category];
-  const custom = getCustomCategories().find(
+  const custom = getCachedCustomCategories().find(
     (c) => c.name.toLowerCase() === category.toLowerCase()
   );
   if (custom) return custom.icon as keyof typeof MaterialIcons.glyphMap;
@@ -37,7 +49,7 @@ function getCategoryColor(category: string): { bg: string; text: string } {
   if (CATEGORY_COLORS[category as Category]) {
     return CATEGORY_COLORS[category as Category];
   }
-  const custom = getCustomCategories().find(
+  const custom = getCachedCustomCategories().find(
     (c) => c.name.toLowerCase() === category.toLowerCase()
   );
   if (custom) return { bg: `${custom.color}30`, text: custom.color };
@@ -49,9 +61,10 @@ interface Props {
   onPress?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onMerchantPress?: (merchant: string) => void;
 }
 
-export default function TransactionItem({ transaction, onPress, onEdit, onDelete }: Props) {
+function TransactionItem({ transaction, onPress, onEdit, onDelete, onMerchantPress }: Props) {
   const categoryColor = getCategoryColor(transaction.category);
   const iconName = getCategoryIcon(transaction.category);
   const swipeableRef = useRef<Swipeable>(null);
@@ -137,6 +150,9 @@ export default function TransactionItem({ transaction, onPress, onEdit, onDelete
       friction={2}
       rightThreshold={40}
       leftThreshold={40}
+      onSwipeableWillOpen={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }}
     >
       <TouchableOpacity
         style={styles.container}
@@ -147,15 +163,22 @@ export default function TransactionItem({ transaction, onPress, onEdit, onDelete
           <MaterialIcons name={iconName} size={22} color={categoryColor.text} />
         </View>
         <View style={styles.info}>
-          <Text style={styles.merchant} numberOfLines={1}>
+          <Text
+            style={styles.merchant}
+            numberOfLines={1}
+            onPress={onMerchantPress ? () => onMerchantPress(transaction.merchant) : undefined}
+          >
             {transaction.merchant}
           </Text>
           <Text style={styles.subtitle}>
             {transaction.category} • {formatTime(transaction.timestamp)}
           </Text>
         </View>
-        <Text style={styles.amount}>
-          -₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        <Text style={[
+          styles.amount,
+          transaction.type === 'income' && styles.amountIncome,
+        ]}>
+          {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
         </Text>
       </TouchableOpacity>
     </Swipeable>
@@ -199,14 +222,15 @@ const styles = StyleSheet.create({
     gap: 16,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
+    borderColor: Colors.borderSubtle,
+    ...Elevation.elevation1,
   },
   iconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -214,18 +238,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   merchant: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
   subtitle: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 12,
     marginTop: 2,
   },
   amount: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
+  amountIncome: {
+    color: Colors.income,
+  },
 });
+
+export default React.memo(TransactionItem);

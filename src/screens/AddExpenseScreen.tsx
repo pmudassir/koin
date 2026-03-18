@@ -1,30 +1,39 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput
+  TextInput,
+  Pressable,
 } from "react-native";
+import AnimatedRN, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  FadeInDown,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import { showToast } from "../components/Toast";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Colors } from "../theme";
-import { Category } from "../models/Transaction";
+import { Colors, Elevation } from "../theme";
+import { Category, TransactionType } from "../models/Transaction";
 import {
   addTransaction,
   updateTransaction,
+  deleteTransaction,
 } from "../storage/transactionStorage";
-import { recordCategoryOverride } from "../services/smartCategorizer";
-import { getCombinedSuggestions, Suggestion } from "../services/suggestions";
+import { recordCategoryOverride, smartCategorize } from "../services/smartCategorizer";
+import { getCombinedSuggestions, Suggestion, getAmountForMerchant } from "../services/suggestions";
 import { categorize } from "../utils/categorization";
 import { getCustomCategories } from "../storage/categoryStorage";
 import NumPad from "../components/NumPad";
 import CategoryChip from "../components/CategoryChip";
 
-const DEFAULT_CATEGORIES: Category[] = [
+const EXPENSE_CATEGORIES: Category[] = [
   "Food",
   "Transport",
   "Groceries",
@@ -34,6 +43,40 @@ const DEFAULT_CATEGORIES: Category[] = [
   "Entertainment",
   "Others",
 ];
+
+const INCOME_CATEGORIES: Category[] = [
+  "Transfer",
+  "Others",
+];
+
+const AnimatedPressable = AnimatedRN.createAnimatedComponent(Pressable);
+
+function SaveButton({ label, onPress, color }: { label: string; onPress: () => void; color?: string }) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <AnimatedPressable
+      style={[styles.saveButton, color ? { backgroundColor: color } : undefined, animatedStyle]}
+      onPressIn={() => {
+        scale.value = withSpring(0.96, { damping: 15, stiffness: 300 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 12, stiffness: 200 });
+      }}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onPress();
+      }}
+    >
+      <Text style={styles.saveButtonText}>{label}</Text>
+      <MaterialIcons name="check-circle" size={22} color={Colors.white} />
+    </AnimatedPressable>
+  );
+}
 
 export default function AddExpenseScreen() {
   const navigation = useNavigation();
@@ -49,14 +92,53 @@ export default function AddExpenseScreen() {
     editingTxn?.category || "Food",
   );
   const [note, setNote] = useState(editingTxn?.note || "");
+  const [txnType, setTxnType] = useState<TransactionType>(
+    editingTxn?.type || "expense",
+  );
   const [suggestions] = useState<Suggestion[]>(() => getCombinedSuggestions());
+  const [autoLabel, setAutoLabel] = useState<string | null>(null);
+  const merchantDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [userChangedCategory, setUserChangedCategory] = useState(false);
+
+  // Auto-categorize on merchant input change
+  useEffect(() => {
+    if (isEditing || !merchant.trim() || userChangedCategory) return;
+    if (merchantDebounce.current) clearTimeout(merchantDebounce.current);
+
+    merchantDebounce.current = setTimeout(() => {
+      const result = smartCategorize(merchant.trim());
+      if (result.confidence === "high" || result.confidence === "medium") {
+        setCategory(result.category);
+        setAutoLabel(`Auto: ${result.category}`);
+        setTimeout(() => setAutoLabel(null), 2000);
+      }
+
+      // Smart amount pre-fill: if amount is still 0, suggest average
+      if (amount === "0") {
+        const suggestedAmount = getAmountForMerchant(merchant.trim());
+        if (suggestedAmount) {
+          setAmount(suggestedAmount.toString());
+        }
+      }
+    }, 300);
+
+    return () => {
+      if (merchantDebounce.current) clearTimeout(merchantDebounce.current);
+    };
+  }, [merchant]);
+
+  // Amount shortcut chips
+  const amountShortcuts = [50, 100, 200, 500, 1000];
 
   // Load custom categories
   const customCategories = getCustomCategories();
+  const baseCategories = txnType === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const allCategories = [
-    ...DEFAULT_CATEGORIES,
+    ...baseCategories,
     ...customCategories.map((c: { name: string }) => c.name as Category),
   ];
+
+  const isIncome = txnType === 'income';
 
   const handleKeyPress = (key: string) => {
     setAmount((prev: string) => {
@@ -102,16 +184,36 @@ export default function AddExpenseScreen() {
         amount: numericAmount,
         merchant: merchantName,
         category,
+        type: txnType,
         note: note.trim() || undefined,
       });
     } else {
-      addTransaction({
+      const saved = addTransaction({
         amount: numericAmount,
         merchant: merchantName,
         category,
+        type: txnType,
         isAutoDetected: false,
         note: note.trim() || undefined,
       });
+
+      // Show undo toast
+      navigation.goBack();
+      setTimeout(() => {
+        showToast({
+          type: "success",
+          title: isIncome ? "Income Saved" : "Expense Saved",
+          message: `${merchantName} — ₹${numericAmount.toLocaleString("en-IN")}`,
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onPress: () => {
+              deleteTransaction(saved.id);
+            },
+          },
+        });
+      }, 100);
+      return;
     }
 
     navigation.goBack();
@@ -134,19 +236,63 @@ export default function AddExpenseScreen() {
             style={styles.headerButton}
             onPress={() => navigation.goBack()}
           >
-            <MaterialIcons name="close" size={24} color={Colors.slate100} />
+            <MaterialIcons name="close" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            {isEditing ? "Edit Expense" : "Add Expense"}
+            {isEditing
+              ? isIncome ? "Edit Income" : "Edit Expense"
+              : isIncome ? "Add Income" : "Add Expense"}
           </Text>
           <TouchableOpacity style={styles.historyButton}>
             <MaterialIcons name="history" size={24} color={Colors.primary} />
           </TouchableOpacity>
         </View>
 
+        {/* Expense / Income Toggle */}
+        {!isEditing && (
+          <View style={styles.typeToggleRow}>
+            <TouchableOpacity
+              style={[styles.typeToggle, !isIncome && styles.typeToggleActive]}
+              activeOpacity={0.7}
+              onPress={() => {
+                setTxnType('expense');
+                setCategory('Food');
+              }}
+            >
+              <MaterialIcons
+                name="arrow-downward"
+                size={16}
+                color={!isIncome ? Colors.expense : Colors.textTertiary}
+              />
+              <Text style={[styles.typeToggleText, !isIncome && styles.typeToggleTextExpense]}>
+                Expense
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.typeToggle, isIncome && styles.typeToggleActiveIncome]}
+              activeOpacity={0.7}
+              onPress={() => {
+                setTxnType('income');
+                setCategory('Transfer');
+              }}
+            >
+              <MaterialIcons
+                name="arrow-upward"
+                size={16}
+                color={isIncome ? Colors.income : Colors.textTertiary}
+              />
+              <Text style={[styles.typeToggleText, isIncome && styles.typeToggleTextIncome]}>
+                Income
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Amount Display */}
         <View style={styles.amountSection}>
-          <Text style={styles.amountLabel}>SPENDING AMOUNT</Text>
+          <Text style={styles.amountLabel}>
+            {isIncome ? "INCOME AMOUNT" : "SPENDING AMOUNT"}
+          </Text>
           <View style={styles.amountRow}>
             <Text style={styles.currencySymbol}>₹</Text>
             <Text style={styles.amountText}>
@@ -156,11 +302,11 @@ export default function AddExpenseScreen() {
 
           {/* Merchant Name Input */}
           <View style={styles.inputRow}>
-            <MaterialIcons name="store" size={18} color={Colors.slate500} />
+            <MaterialIcons name="store" size={18} color={Colors.textTertiary} />
             <TextInput
               style={styles.merchantInput}
               placeholder="Merchant name (e.g. Swiggy, Uber)"
-              placeholderTextColor={Colors.slate600}
+              placeholderTextColor={Colors.textTertiary}
               value={merchant}
               onChangeText={setMerchant}
               returnKeyType="done"
@@ -170,11 +316,11 @@ export default function AddExpenseScreen() {
 
           {/* Note Input */}
           <View style={styles.inputRow}>
-            <MaterialIcons name="edit-note" size={18} color={Colors.slate500} />
+            <MaterialIcons name="edit-note" size={18} color={Colors.textTertiary} />
             <TextInput
               style={styles.noteInput}
               placeholder="Add a note (optional)"
-              placeholderTextColor={Colors.slate600}
+              placeholderTextColor={Colors.textTertiary}
               value={note}
               onChangeText={setNote}
               returnKeyType="done"
@@ -204,12 +350,12 @@ export default function AddExpenseScreen() {
                   <MaterialIcons
                     name={getCategoryMaterialIcon(s.category)}
                     size={18}
-                    color={i === 0 ? Colors.primary : Colors.slate400}
+                    color={i === 0 ? Colors.primary : Colors.textTertiary}
                   />
                   <Text
                     style={[
                       styles.suggestionText,
-                      i === 0 && { color: Colors.slate100 },
+                      i === 0 && { color: Colors.textPrimary },
                     ]}
                   >
                     {s.merchant} ₹{s.amount.toLocaleString("en-IN")}
@@ -222,6 +368,9 @@ export default function AddExpenseScreen() {
 
         {/* Category Chips */}
         <View style={styles.categorySection}>
+          {autoLabel && (
+            <Text style={styles.autoLabel}>{autoLabel}</Text>
+          )}
           <ScrollView contentContainerStyle={styles.categoryScroll}>
             <View style={styles.categoryWrap}>
               {allCategories.map((cat) => (
@@ -229,7 +378,13 @@ export default function AddExpenseScreen() {
                   key={cat}
                   category={cat}
                   isActive={category === cat}
-                  onPress={() => setCategory(cat)}
+                  onPress={() => {
+                    setCategory(cat);
+                    setUserChangedCategory(true);
+                    if (merchant.trim()) {
+                      recordCategoryOverride(merchant.trim(), cat);
+                    }
+                  }}
                 />
               ))}
             </View>
@@ -238,26 +393,50 @@ export default function AddExpenseScreen() {
 
         {/* Numpad + Save Button */}
         <View style={styles.bottomSection}>
+          {/* Amount Shortcut Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.amountShortcutsScroll}
+          >
+            {amountShortcuts.map((amt) => (
+              <TouchableOpacity
+                key={amt}
+                style={[
+                  styles.amountChip,
+                  parseFloat(amount) === amt && styles.amountChipActive,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setAmount(amt.toString());
+                }}
+              >
+                <Text
+                  style={[
+                    styles.amountChipText,
+                    parseFloat(amount) === amt && styles.amountChipTextActive,
+                  ]}
+                >
+                  {amt >= 1000 ? `${amt / 1000}k` : `₹${amt}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
           <NumPad
             value={amount}
             onKeyPress={handleKeyPress}
             onBackspace={handleBackspace}
           />
           <View style={styles.saveButtonContainer}>
-            <TouchableOpacity
-              style={styles.saveButton}
-              activeOpacity={0.8}
+            <SaveButton
+              label={isEditing
+                ? isIncome ? "Update Income" : "Update Expense"
+                : isIncome ? "Save Income" : "Save Expense"}
               onPress={handleSave}
-            >
-              <Text style={styles.saveButtonText}>
-                {isEditing ? "Update Expense" : "Save Expense"}
-              </Text>
-              <MaterialIcons
-                name="check-circle"
-                size={22}
-                color={Colors.white}
-              />
-            </TouchableOpacity>
+              color={isIncome ? Colors.income : undefined}
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -285,7 +464,7 @@ function getCategoryMaterialIcon(
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
   },
   safeArea: {
     flex: 1,
@@ -302,21 +481,22 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
+    ...Elevation.elevation1,
   },
   headerTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: -0.2,
   },
   historyButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(19, 127, 236, 0.1)",
+    backgroundColor: Colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -340,12 +520,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   currencySymbol: {
-    color: Colors.slate400,
+    color: Colors.textTertiary,
     fontSize: 32,
     fontWeight: "300",
   },
   amountText: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 48,
     fontWeight: "700",
     letterSpacing: -1,
@@ -355,24 +535,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     width: "100%",
-    backgroundColor: "rgba(30, 41, 59, 0.4)",
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "rgba(30, 41, 59, 0.8)",
+    borderColor: Colors.borderSubtle,
   },
   merchantInput: {
     flex: 1,
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: "500",
     padding: 0,
   },
   noteInput: {
     flex: 1,
-    color: Colors.slate300,
+    color: Colors.textSecondary,
     fontSize: 14,
     padding: 0,
   },
@@ -381,7 +561,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   suggestionsLabel: {
-    color: Colors.slate400,
+    color: Colors.textTertiary,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.5,
@@ -400,15 +580,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.slate800,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
   },
   suggestionChipActive: {
-    backgroundColor: "rgba(19, 127, 236, 0.1)",
+    backgroundColor: Colors.primarySoft,
     borderWidth: 1,
-    borderColor: "rgba(19, 127, 236, 0.2)",
+    borderColor: Colors.primaryMedium,
   },
   suggestionText: {
-    color: Colors.slate300,
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -427,13 +609,14 @@ const styles = StyleSheet.create({
   bottomSection: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    backgroundColor: Colors.surface,
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     paddingTop: 20,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: "rgba(30, 41, 59, 0.8)",
+    borderTopColor: Colors.borderSubtle,
+    ...Elevation.elevation3,
   },
   saveButtonContainer: {
     paddingHorizontal: 24,
@@ -448,15 +631,84 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Elevation.elevationBrand,
   },
   saveButtonText: {
     color: Colors.white,
     fontSize: 18,
     fontWeight: "700",
+  },
+  autoLabel: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  amountShortcutsScroll: {
+    paddingHorizontal: 24,
+    gap: 8,
+    marginBottom: 12,
+  },
+  amountChip: {
+    paddingHorizontal: 16,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.canvas,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  amountChipActive: {
+    backgroundColor: Colors.primarySoft,
+    borderColor: Colors.primaryMedium,
+  },
+  amountChipText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  amountChipTextActive: {
+    color: Colors.primary,
+  },
+  typeToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    marginBottom: 4,
+  },
+  typeToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+  },
+  typeToggleActive: {
+    backgroundColor: Colors.expenseBg,
+    borderColor: Colors.expense,
+  },
+  typeToggleActiveIncome: {
+    backgroundColor: Colors.incomeBg,
+    borderColor: Colors.income,
+  },
+  typeToggleText: {
+    color: Colors.textTertiary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  typeToggleTextExpense: {
+    color: Colors.expense,
+  },
+  typeToggleTextIncome: {
+    color: Colors.income,
   },
 });

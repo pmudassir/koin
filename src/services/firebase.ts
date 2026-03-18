@@ -63,44 +63,82 @@ export function getCurrentUserId(): string | null {
   return getItem<string>(STORAGE_KEYS.USER_ID);
 }
 
+/**
+ * Sync with exponential backoff retry (max 3 attempts).
+ * Uses incremental sync: only fetches transactions modified since last sync.
+ */
 export async function syncTransactions(): Promise<void> {
+  let attempt = 0;
+  const maxAttempts = 3;
+
+  while (attempt < maxAttempts) {
+    try {
+      await _doSync();
+      return;
+    } catch (error) {
+      attempt++;
+      if (attempt >= maxAttempts) {
+        console.warn(`Sync failed after ${maxAttempts} attempts:`, error);
+        return;
+      }
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt - 1) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+async function _doSync(): Promise<void> {
   if (!db) return;
   const userId = getCurrentUserId();
   if (!userId) return;
 
-  try {
-    const localTxns = getTransactions();
-    const unsyncedTxns = localTxns.filter((t) => !t.synced);
+  const localTxns = getTransactions();
+  const unsyncedTxns = localTxns.filter((t) => !t.synced);
 
-    const syncedIds: string[] = [];
-    for (const txn of unsyncedTxns) {
-      try {
-        const txnRef = doc(db, `users/${userId}/transactions`, txn.id);
-        await setDoc(txnRef, {
-          ...txn,
-          synced: true,
-          updatedAt: Timestamp.now(),
-        });
-        syncedIds.push(txn.id);
-      } catch (e) {
-        console.warn('Failed to sync transaction:', txn.id, e);
-      }
-    }
-
-    if (syncedIds.length > 0) {
-      markTransactionsSynced(syncedIds);
-    }
-
-    const txnCollection = collection(db, `users/${userId}/transactions`);
-    const snapshot = await getDocs(txnCollection);
-
-    const remoteTxns: Transaction[] = [];
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data() as Transaction;
-      remoteTxns.push({ ...data, id: docSnap.id, synced: true });
+  // Push unsynced local transactions to Firestore
+  const syncedIds: string[] = [];
+  for (const txn of unsyncedTxns) {
+    const txnRef = doc(db, `users/${userId}/transactions`, txn.id);
+    await setDoc(txnRef, {
+      ...txn,
+      synced: true,
+      updatedAt: Timestamp.now(),
     });
+    syncedIds.push(txn.id);
+  }
 
-    const localMap = new Map(localTxns.map((t) => [t.id, t]));
+  if (syncedIds.length > 0) {
+    markTransactionsSynced(syncedIds);
+  }
+
+  // Pull remote transactions (incremental: only since last sync)
+  const lastSync = getItem<number>(STORAGE_KEYS.LAST_SYNC);
+  const txnCollection = collection(db, `users/${userId}/transactions`);
+
+  let remoteQuery;
+  if (lastSync) {
+    // Incremental: only fetch transactions modified since last sync
+    const lastSyncTimestamp = Timestamp.fromMillis(lastSync);
+    remoteQuery = query(txnCollection, where('updatedAt', '>', lastSyncTimestamp));
+  } else {
+    // First sync or missing timestamp: full fetch
+    remoteQuery = query(txnCollection);
+  }
+
+  const snapshot = await getDocs(remoteQuery);
+
+  const remoteTxns: Transaction[] = [];
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() as Transaction;
+    remoteTxns.push({ ...data, id: docSnap.id, synced: true });
+  });
+
+  // Merge remote into local (remote timestamp wins conflicts)
+  if (remoteTxns.length > 0) {
+    const freshLocal = getTransactions();
+    const localMap = new Map(freshLocal.map((t) => [t.id, t]));
+
     for (const remote of remoteTxns) {
       const local = localMap.get(remote.id);
       if (!local || remote.timestamp > local.timestamp) {
@@ -109,13 +147,11 @@ export async function syncTransactions(): Promise<void> {
     }
 
     const merged = Array.from(localMap.values()).sort(
-      (a, b) => b.timestamp - a.timestamp
+      (a, b) => b.timestamp - a.timestamp,
     );
 
-    const { setItem: mmkvSet } = await import('../storage/mmkv');
-    mmkvSet(STORAGE_KEYS.TRANSACTIONS, merged);
-    mmkvSet(STORAGE_KEYS.LAST_SYNC, Date.now());
-  } catch (error) {
-    console.warn('Sync failed (will retry later):', error);
+    setItem(STORAGE_KEYS.TRANSACTIONS, merged);
   }
+
+  setItem(STORAGE_KEYS.LAST_SYNC, Date.now());
 }

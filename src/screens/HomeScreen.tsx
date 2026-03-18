@@ -7,13 +7,24 @@ import {
   TouchableOpacity,
   StatusBar,
   RefreshControl,
+  Image,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withDelay,
+  withTiming,
+  FadeInDown,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import { showToast } from "../components/Toast";
 import { showConfirm } from "../components/Toast";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Colors } from "../theme";
+import { Colors, Elevation } from "../theme";
 import { Transaction } from "../models/Transaction";
 import {
   getTransactionsForDay,
@@ -28,12 +39,20 @@ import {
 } from "../storage/transactionStorage";
 import TransactionItem from "../components/TransactionItem";
 import BudgetCard from "../components/BudgetCard";
+import { HomeSkeleton } from "../components/Skeleton";
+import SyncStatusBadge from "../components/SyncStatusBadge";
+import { runSync } from "../services/syncManager";
+import { syncTransactions } from "../services/firebase";
+import { getCombinedSuggestions, Suggestion } from "../services/suggestions";
+import { SuggestionPill } from "../components/SuggestionPill";
 import { setupShareListener } from "../services/shareExtensionBridge";
 import {
   transactionDetector,
   DetectedTransaction,
 } from "../services/transactionDetector";
 import { smartCategorize } from "../services/smartCategorizer";
+import { getStreakData, updateStreak, StreakData } from "../services/streakService";
+import StreakBadge from "../components/StreakBadge";
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
@@ -46,6 +65,9 @@ export default function HomeScreen() {
     [],
   );
   const [refreshing, setRefreshing] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [streak, setStreak] = useState<StreakData>(getStreakData());
 
   const loadData = useCallback(() => {
     const period = getBudgetPeriod();
@@ -53,11 +75,16 @@ export default function HomeScreen() {
     setPeriodTotal(getPeriodTotal());
     setBudget(getDailyBudget());
     setRecentTransactions(getTransactionsForDay(new Date()).slice(0, 5));
+    setSuggestions(getCombinedSuggestions().slice(0, 4));
+    setStreak(getStreakData());
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
+      if (isFirstLoad) setIsFirstLoad(false);
+      // Trigger background sync
+      runSync(syncTransactions);
     }, [loadData]),
   );
 
@@ -119,12 +146,55 @@ export default function HomeScreen() {
       onConfirm: () => {
         deleteTransaction(txn.id);
         loadData();
+        showToast({
+          type: "success",
+          title: "Transaction Deleted",
+          duration: 5000,
+          action: {
+            label: "Undo",
+            onPress: () => {
+              addTransaction({
+                amount: txn.amount,
+                merchant: txn.merchant,
+                category: txn.category,
+                isAutoDetected: txn.isAutoDetected,
+                note: txn.note,
+              });
+              loadData();
+            },
+          },
+        });
       },
     });
   };
 
   const handleEdit = (txn: Transaction) => {
     navigation.navigate("AddExpense", { transaction: txn });
+  };
+
+  const handleQuickLog = (suggestion: Suggestion) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const saved = addTransaction({
+      amount: suggestion.amount,
+      merchant: suggestion.merchant,
+      category: suggestion.category,
+      isAutoDetected: false,
+    });
+    updateStreak();
+    loadData();
+    showToast({
+      type: "success",
+      title: "Expense Saved",
+      message: `${suggestion.merchant} — ₹${suggestion.amount.toLocaleString("en-IN")}`,
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onPress: () => {
+          deleteTransaction(saved.id);
+          loadData();
+        },
+      },
+    });
   };
 
   const periodLabel =
@@ -139,28 +209,32 @@ export default function HomeScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={Colors.backgroundDark}
+        barStyle="dark-content"
+        backgroundColor={Colors.canvas}
       />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>K</Text>
-            </View>
+            <Image
+              source={require('../../assets/mascot/mascot-idle.png')}
+              style={styles.mascotAvatar}
+            />
             <View>
               <Text style={styles.welcomeText}>Welcome back,</Text>
               <Text style={styles.dateText}>{periodLabel}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.notifButton}>
-            <MaterialIcons
-              name="notifications-none"
-              size={24}
-              color={Colors.slate300}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <SyncStatusBadge />
+            <TouchableOpacity style={styles.notifButton}>
+              <MaterialIcons
+                name="notifications-none"
+                size={24}
+                color={Colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -175,9 +249,18 @@ export default function HomeScreen() {
             />
           }
         >
-          {/* Total Spent */}
+          {isFirstLoad ? (
+            <HomeSkeleton />
+          ) : (
+          <>
+          {/* Total Spent + Streak */}
           <View style={styles.totalSection}>
-            <Text style={styles.totalLabel}>Total Spent {periodLabel}</Text>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Spent {periodLabel}</Text>
+              {streak.loggingStreak > 0 && (
+                <StreakBadge count={streak.loggingStreak} />
+              )}
+            </View>
             <Text style={styles.totalAmount}>
               ₹
               {periodTotal.toLocaleString("en-IN", {
@@ -195,6 +278,35 @@ export default function HomeScreen() {
             />
           </View>
 
+          {/* Quick Log */}
+          {suggestions.length > 0 && (
+            <View style={styles.quickLogSection}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.quickLogTitleRow}>
+                  <MaterialIcons name="bolt" size={18} color={Colors.primary} />
+                  <Text style={styles.sectionTitle}>Quick Log</Text>
+                </View>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickLogScroll}
+              >
+                {suggestions.map((s, i) => (
+                  <Animated.View
+                    key={`${s.merchant}-${i}`}
+                    entering={FadeInDown.delay(i * 80).springify().damping(18).stiffness(200)}
+                  >
+                    <SuggestionPill
+                      suggestion={s}
+                      onPress={handleQuickLog}
+                    />
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Recent Transactions */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -207,10 +319,9 @@ export default function HomeScreen() {
 
           {recentTransactions.length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialIcons
-                name="receipt-long"
-                size={48}
-                color={Colors.slate700}
+              <Image
+                source={require('../../assets/mascot/mascot-idle.png')}
+                style={styles.emptyMascot}
               />
               <Text style={styles.emptyText}>No transactions today</Text>
               <Text style={styles.emptySubtext}>
@@ -219,15 +330,21 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.txnList}>
-              {recentTransactions.map((txn) => (
-                <TransactionItem
+              {recentTransactions.map((txn, index) => (
+                <Animated.View
                   key={txn.id}
-                  transaction={txn}
-                  onEdit={() => handleEdit(txn)}
-                  onDelete={() => handleDelete(txn)}
-                />
+                  entering={FadeInDown.delay(index * 60).springify().damping(18).stiffness(200)}
+                >
+                  <TransactionItem
+                    transaction={txn}
+                    onEdit={() => handleEdit(txn)}
+                    onDelete={() => handleDelete(txn)}
+                  />
+                </Animated.View>
               ))}
             </View>
+          )}
+          </>
           )}
         </ScrollView>
 
@@ -240,7 +357,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
   },
   safeArea: {
     flex: 1,
@@ -249,7 +366,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 16,
   },
@@ -258,58 +375,64 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.slate800,
-    borderWidth: 2,
-    borderColor: "rgba(19, 127, 236, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
+  mascotAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
   },
-  avatarText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: "700",
+  emptyMascot: {
+    width: 120,
+    height: 120,
+    marginBottom: 8,
   },
   welcomeText: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 12,
     fontWeight: "500",
   },
   dateText: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: -0.3,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   notifButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.slate800,
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
+    ...Elevation.elevation1,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   totalSection: {
     paddingVertical: 24,
   },
+  totalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   totalLabel: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 4,
   },
   totalAmount: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 40,
     fontWeight: "700",
     letterSpacing: -1,
@@ -324,7 +447,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: -0.2,
@@ -344,12 +467,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 16,
     fontWeight: "600",
   },
   emptySubtext: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 13,
+  },
+  quickLogSection: {
+    marginBottom: 24,
+  },
+  quickLogTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  quickLogScroll: {
+    gap: 10,
   },
 });

@@ -5,11 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#101922"
+      "backgroundColor": "#F5F4FF"
     },
     "ios": {
       "supportsTablet": false,
@@ -26,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#101922",
+        "backgroundColor": "#F5F4FF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -41,6 +41,25 @@
         "projectId": "08d86ddd-ce27-4c89-a8a6-6d817604836e"
       }
     },
-    "owner": "mudassirmhd"
+    "owner": "mudassirmhd",
+    "plugins": [
+      "expo-sharing",
+      ["expo-widgets", {
+        "widgets": [
+          {
+            "name": "BudgetWidget",
+            "src": "./widgets/BudgetWidget.tsx",
+            "families": ["systemSmall", "systemMedium"],
+            "description": "See today's spending and budget at a glance"
+          },
+          {
+            "name": "QuickAddWidget",
+            "src": "./widgets/QuickAddWidget.tsx",
+            "families": ["accessoryCircular"],
+            "description": "Quick add expense"
+          }
+        ]
+      }]
+    ]
   }
 }

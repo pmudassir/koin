@@ -5,11 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../theme';
+import { Colors, Elevation } from '../theme';
 import { Category } from '../models/Transaction';
 import {
   getCombinedSuggestions,
@@ -54,11 +56,11 @@ export default function SmartSuggestionsScreen() {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <MaterialIcons name="chevron-left" size={28} color={Colors.slate300} />
+            <MaterialIcons name="chevron-left" size={28} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Smart Suggestions</Text>
           <TouchableOpacity style={styles.searchButton}>
-            <MaterialIcons name="search" size={22} color={Colors.slate300} />
+            <MaterialIcons name="search" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -84,16 +86,21 @@ export default function SmartSuggestionsScreen() {
               style={styles.pillsContainer}
             >
               {quickSuggestions.map((s, i) => (
-                <SuggestionPill
-                  key={`quick-${i}`}
-                  suggestion={s}
-                  onPress={handleQuickLog}
-                  variant="pill"
-                />
+                <Animated.View key={`quick-${i}`} entering={FadeInDown.delay(i * 60).springify().damping(18)}>
+                  <SuggestionPill
+                    suggestion={s}
+                    onPress={handleQuickLog}
+                    variant="pill"
+                  />
+                </Animated.View>
               ))}
             </ScrollView>
           ) : (
             <View style={styles.emptyPills}>
+              <Image
+                source={require('../../assets/mascot/mascot-smart.png')}
+                style={styles.emptyMascot}
+              />
               <Text style={styles.emptyText}>
                 Add some expenses to see suggestions here
               </Text>
@@ -116,7 +123,10 @@ export default function SmartSuggestionsScreen() {
               </View>
             ) : (
               <View style={styles.emptyGrid}>
-                <MaterialIcons name="lightbulb-outline" size={32} color={Colors.slate600} />
+                <Image
+                  source={require('../../assets/mascot/mascot-smart.png')}
+                  style={styles.emptyGridMascot}
+                />
                 <Text style={styles.emptyGridText}>
                   As you log expenses, frequently used merchants will appear here
                 </Text>
@@ -137,7 +147,7 @@ export default function SmartSuggestionsScreen() {
                 {todayTransactions.map((txn) => (
                   <View key={txn.id} style={styles.txnItem}>
                     <View style={styles.txnIcon}>
-                      <MaterialIcons name="payments" size={20} color={Colors.slate400} />
+                      <MaterialIcons name="payments" size={20} color={Colors.primary} />
                     </View>
                     <View style={styles.txnInfo}>
                       <Text style={styles.txnMerchant}>{txn.merchant}</Text>
@@ -168,7 +178,7 @@ export default function SmartSuggestionsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
   },
   safeArea: {
     flex: 1,
@@ -184,22 +194,25 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.slate800,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Elevation.elevation1,
   },
   headerTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   searchButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.slate800,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Elevation.elevation1,
   },
   content: {
     flex: 1,
@@ -208,18 +221,18 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   hero: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 8,
   },
   heroTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
   heroSubtext: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 16,
     marginTop: 8,
     lineHeight: 22,
@@ -228,24 +241,34 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   pillsScroll: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     gap: 12,
   },
   emptyPills: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 20,
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyMascot: {
+    width: 100,
+    height: 100,
+  },
+  emptyGridMascot: {
+    width: 80,
+    height: 80,
   },
   emptyText: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 14,
     textAlign: 'center',
   },
   gridSection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 32,
   },
   sectionLabel: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.5,
@@ -263,14 +286,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyGridText: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 13,
     textAlign: 'center',
     maxWidth: 240,
     lineHeight: 18,
   },
   todaySection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 32,
   },
   sectionHeader: {
@@ -280,7 +303,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -298,13 +321,16 @@ const styles = StyleSheet.create({
     gap: 16,
     padding: 12,
     borderRadius: 16,
-    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
+    ...Elevation.elevation1,
   },
   txnIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.slate700,
+    backgroundColor: Colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -312,22 +338,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   txnMerchant: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
   txnTime: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 12,
     marginTop: 2,
   },
   txnAmount: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   noTxnText: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: 20,

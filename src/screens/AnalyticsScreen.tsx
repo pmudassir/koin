@@ -6,18 +6,19 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { Colors } from "../theme";
+import { Colors, Elevation } from "../theme";
 import {
   getWeeklyData,
   getCategoryBreakdown,
   getTransactions,
 } from "../storage/transactionStorage";
 import { CATEGORY_COLORS, Category } from "../models/Transaction";
-import { getCustomCategories } from "../storage/categoryStorage";
+import { getCustomCategories, onCustomCategoriesChange } from "../storage/categoryStorage";
 import {
   getMonthOverMonthChange,
   getSpendingTrend,
@@ -25,6 +26,8 @@ import {
   InsightCard,
   MonthTrend,
 } from "../services/insightsEngine";
+import { AnalyticsSkeleton } from "../components/Skeleton";
+import SpendingHeatmap from "../components/SpendingHeatmap";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -42,9 +45,17 @@ const CATEGORY_ICON_MAP: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   Others: "more-horiz",
 };
 
+// Cache custom categories to avoid re-reading MMKV on every render
+let _cachedCustomCategories: ReturnType<typeof getCustomCategories> | null = null;
+function getCachedCustomCategories() {
+  if (!_cachedCustomCategories) _cachedCustomCategories = getCustomCategories();
+  return _cachedCustomCategories;
+}
+onCustomCategoriesChange(() => { _cachedCustomCategories = null; });
+
 function getCategoryIcon(category: string): keyof typeof MaterialIcons.glyphMap {
   if (CATEGORY_ICON_MAP[category]) return CATEGORY_ICON_MAP[category];
-  const custom = getCustomCategories().find(
+  const custom = getCachedCustomCategories().find(
     (c) => c.name.toLowerCase() === category.toLowerCase()
   );
   if (custom) return custom.icon as keyof typeof MaterialIcons.glyphMap;
@@ -54,7 +65,7 @@ function getCategoryIcon(category: string): keyof typeof MaterialIcons.glyphMap 
 function getCategoryBarColor(category: string): string {
   const colors = CATEGORY_COLORS[category as Category];
   if (colors?.text) return colors.text;
-  const custom = getCustomCategories().find(
+  const custom = getCachedCustomCategories().find(
     (c) => c.name.toLowerCase() === category.toLowerCase()
   );
   if (custom) return custom.color;
@@ -63,33 +74,33 @@ function getCategoryBarColor(category: string): string {
 
 const INSIGHT_TINTS = {
   red: {
-    bg: "rgba(239, 68, 68, 0.1)",
-    border: "rgba(239, 68, 68, 0.2)",
-    text: "#f87171",
+    bg: "#FEF2F2",
+    border: "#FECACA",
+    text: "#DC2626",
     icon: "#ef4444",
   },
   green: {
-    bg: "rgba(16, 185, 129, 0.1)",
-    border: "rgba(16, 185, 129, 0.2)",
-    text: "#34d399",
+    bg: "#ECFDF5",
+    border: "#A7F3D0",
+    text: "#059669",
     icon: "#10b981",
   },
   blue: {
-    bg: "rgba(59, 130, 246, 0.1)",
-    border: "rgba(59, 130, 246, 0.2)",
-    text: "#60a5fa",
+    bg: "#EFF6FF",
+    border: "#BFDBFE",
+    text: "#2563EB",
     icon: "#3b82f6",
   },
   amber: {
-    bg: "rgba(245, 158, 11, 0.1)",
-    border: "rgba(245, 158, 11, 0.2)",
-    text: "#fbbf24",
+    bg: "#FFFBEB",
+    border: "#FDE68A",
+    text: "#D97706",
     icon: "#f59e0b",
   },
   purple: {
-    bg: "rgba(139, 92, 246, 0.1)",
-    border: "rgba(139, 92, 246, 0.2)",
-    text: "#a78bfa",
+    bg: "#F5F3FF",
+    border: "#DDD6FE",
+    text: "#7C3AED",
     icon: "#8b5cf6",
   },
 };
@@ -106,21 +117,32 @@ export default function AnalyticsScreen() {
   const [monthChange, setMonthChange] = useState(0);
   const [trendData, setTrendData] = useState<MonthTrend[]>([]);
   const [insights, setInsights] = useState<InsightCard[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
+
+  const loadData = useCallback(() => {
+    setWeeklyData(getWeeklyData());
+    setCategoryData(getCategoryBreakdown());
+    const txns = getTransactions();
+    setTotalSpent(txns.reduce((sum, t) => sum + t.amount, 0));
+    const { totalChange } = getMonthOverMonthChange();
+    setMonthChange(totalChange);
+    setTrendData(getSpendingTrend(6));
+    setInsights(generateInsights());
+    setIsFirstLoad(false);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      setWeeklyData(getWeeklyData());
-      setCategoryData(getCategoryBreakdown());
-      const txns = getTransactions();
-      setTotalSpent(txns.reduce((sum, t) => sum + t.amount, 0));
-
-      // New data
-      const { totalChange } = getMonthOverMonthChange();
-      setMonthChange(totalChange);
-      setTrendData(getSpendingTrend(6));
-      setInsights(generateInsights());
-    }, []),
+      loadData();
+    }, [loadData]),
   );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+    setTimeout(() => setRefreshing(false), 500);
+  }, [loadData]);
 
   const maxDayAmount = Math.max(...weeklyData.map((d) => d.amount), 1);
   const maxTrendAmount = Math.max(...trendData.map((d) => d.amount), 1);
@@ -172,7 +194,18 @@ export default function AnalyticsScreen() {
           style={styles.content}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+            />
+          }
         >
+          {isFirstLoad ? (
+            <AnalyticsSkeleton />
+          ) : (
+          <>
           {/* Summary */}
           <View style={styles.summary}>
             <Text style={styles.summaryLabel}>TOTAL SPENT</Text>
@@ -348,7 +381,7 @@ export default function AnalyticsScreen() {
                               height: barHeight,
                               backgroundColor: isCurrentMonth
                                 ? Colors.primary
-                                : "rgba(19, 127, 236, 0.4)",
+                                : Colors.primaryMedium,
                             },
                           ]}
                         />
@@ -378,6 +411,17 @@ export default function AnalyticsScreen() {
             </View>
           )}
 
+          {/* Spending Heatmap */}
+          <View style={styles.heatmapSection}>
+            <Text style={styles.sectionTitle}>Spending Calendar</Text>
+            <View style={styles.heatmapCard}>
+              <SpendingHeatmap
+                year={new Date().getFullYear()}
+                month={new Date().getMonth()}
+              />
+            </View>
+          </View>
+
           {/* Category Split */}
           <View style={styles.categorySection}>
             <View style={styles.sectionHeader}>
@@ -396,7 +440,7 @@ export default function AnalyticsScreen() {
                             {
                               backgroundColor:
                                 CATEGORY_COLORS[cat.category as Category]?.bg ||
-                                "rgba(30, 41, 59, 0.5)",
+                                Colors.other.bg,
                             },
                           ]}
                         >
@@ -441,7 +485,7 @@ export default function AnalyticsScreen() {
                 <MaterialIcons
                   name="bar-chart"
                   size={48}
-                  color={Colors.slate700}
+                  color={Colors.textTertiary}
                 />
                 <Text style={styles.emptyText}>
                   Add expenses to see your spending breakdown
@@ -449,6 +493,8 @@ export default function AnalyticsScreen() {
               </View>
             )}
           </View>
+          </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -458,7 +504,7 @@ export default function AnalyticsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
   },
   safeArea: {
     flex: 1,
@@ -467,21 +513,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
   },
   headerTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 24,
     fontWeight: "700",
     letterSpacing: -0.3,
   },
   periodToggle: {
     flexDirection: "row",
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 3,
+    borderWidth: 1,
+    borderColor: Colors.borderSubtle,
   },
   toggleBtn: {
     paddingHorizontal: 16,
@@ -492,7 +540,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   toggleText: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -503,7 +551,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
   summary: {
@@ -511,7 +559,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   summaryLabel: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: "500",
     letterSpacing: 1,
@@ -524,7 +572,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   summaryAmount: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 36,
     fontWeight: "700",
     letterSpacing: -0.5,
@@ -538,17 +586,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   changeBadgeUp: {
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    backgroundColor: Colors.expenseBg,
   },
   changeBadgeDown: {
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    backgroundColor: Colors.incomeBg,
   },
   changeText: {
     fontSize: 14,
     fontWeight: "700",
   },
   dateRange: {
-    color: Colors.slate400,
+    color: Colors.textTertiary,
     fontSize: 14,
     marginTop: 4,
   },
@@ -572,7 +620,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 8,
-    backgroundColor: "rgba(251, 191, 36, 0.12)",
+    backgroundColor: Colors.warningBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -586,8 +634,9 @@ const styles = StyleSheet.create({
     padding: 18,
     paddingTop: 22,
     borderWidth: 1,
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
+    backgroundColor: Colors.surface,
     overflow: "hidden",
+    ...Elevation.elevation1,
   },
   insightAccent: {
     position: "absolute",
@@ -597,7 +646,7 @@ const styles = StyleSheet.create({
     height: 3,
     borderBottomLeftRadius: 3,
     borderBottomRightRadius: 3,
-    opacity: 0.6,
+    opacity: 0.8,
   },
   insightHeader: {
     flexDirection: "row",
@@ -623,26 +672,27 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   insightTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: "700",
     marginBottom: 5,
   },
   insightDesc: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 12,
     lineHeight: 18,
   },
 
   // Charts
   chartCard: {
-    backgroundColor: "rgba(30, 41, 59, 0.4)",
+    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
+    ...Elevation.elevation2,
   },
   chartTitle: {
-    color: Colors.slate300,
+    color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.5,
@@ -665,7 +715,7 @@ const styles = StyleSheet.create({
     height: 120,
     justifyContent: "flex-end",
     alignItems: "center",
-    backgroundColor: "rgba(19, 127, 236, 0.06)",
+    backgroundColor: Colors.primarySoft,
     borderRadius: 8,
     overflow: "hidden",
   },
@@ -676,13 +726,13 @@ const styles = StyleSheet.create({
     minHeight: 4,
   },
   barLabel: {
-    color: Colors.slate400,
+    color: Colors.textTertiary,
     fontSize: 11,
     fontWeight: "500",
     marginTop: 8,
   },
   barAmount: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 9,
     fontWeight: "600",
     height: 14,
@@ -694,7 +744,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionTitle: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: "700",
   },
@@ -722,23 +772,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   categoryName: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: "600",
   },
   categoryAmount: {
-    color: Colors.slate400,
+    color: Colors.textTertiary,
     fontSize: 12,
     marginTop: 2,
   },
   categoryPercent: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 14,
     fontWeight: "700",
   },
   progressBg: {
     height: 6,
-    backgroundColor: Colors.slate800,
+    backgroundColor: Colors.borderSubtle,
     borderRadius: 3,
     overflow: "hidden",
   },
@@ -752,9 +802,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyText: {
-    color: Colors.slate500,
+    color: Colors.textTertiary,
     fontSize: 14,
     textAlign: "center",
     maxWidth: 240,
+  },
+
+  // Heatmap
+  heatmapSection: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  heatmapCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    ...Elevation.elevation1,
   },
 });

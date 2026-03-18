@@ -43,4 +43,10 @@ export const STORAGE_KEYS = {
   PENDING_SHARE: 'pending_share',
   BIOMETRICS_ENABLED: 'biometrics_enabled',
   HAS_ONBOARDED: 'has_onboarded',
+  HAS_SEEN_ONBOARDING: 'has_seen_onboarding',
+  BUDGET_PERIOD: 'budget_period',
+  RECURRING_TRANSACTIONS: 'recurring_transactions',
+  CATEGORY_BUDGETS: 'category_budgets',
+  STREAK_DATA: 'streak_data',
+  NOTIFICATION_PREFS: 'notification_prefs',
 } as const;

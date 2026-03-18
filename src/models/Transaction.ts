@@ -9,6 +9,8 @@ export type Category =
   | 'Entertainment'
   | 'Others';
 
+export type TransactionType = 'expense' | 'income';
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -16,6 +18,7 @@ export interface Transaction {
   category: Category;
   timestamp: number;
   isAutoDetected: boolean;
+  type?: TransactionType; // defaults to 'expense' for backward compat
   note?: string;
   synced?: boolean;
 }
@@ -32,14 +35,15 @@ export const CATEGORY_ICONS: Record<Category, string> = {
   Others: 'more-horiz',
 };
 
-export const CATEGORY_COLORS: Record<Category, { bg: string; text: string }> = {
-  Food: { bg: 'rgba(217, 119, 6, 0.2)', text: '#f59e0b' },
-  Transport: { bg: 'rgba(37, 99, 235, 0.2)', text: '#60a5fa' },
-  Groceries: { bg: 'rgba(22, 163, 74, 0.2)', text: '#4ade80' },
-  Bills: { bg: 'rgba(5, 150, 105, 0.2)', text: '#34d399' },
-  Shopping: { bg: 'rgba(147, 51, 234, 0.2)', text: '#c084fc' },
-  Health: { bg: 'rgba(220, 38, 38, 0.2)', text: '#f87171' },
-  Transfer: { bg: 'rgba(6, 182, 212, 0.2)', text: '#22d3ee' },
-  Entertainment: { bg: 'rgba(219, 39, 119, 0.2)', text: '#f472b6' },
-  Others: { bg: 'rgba(100, 116, 139, 0.3)', text: '#94a3b8' },
+// Opaque Tailwind 100-shade bg + 600-shade icon for light theme
+export const CATEGORY_COLORS: Record<Category, { bg: string; text: string; icon: string }> = {
+  Food: { bg: '#FFEDD5', text: '#EA580C', icon: '#EA580C' },         // orange
+  Transport: { bg: '#DBEAFE', text: '#2563EB', icon: '#2563EB' },    // blue
+  Groceries: { bg: '#FEF9C3', text: '#CA8A04', icon: '#CA8A04' },    // yellow
+  Bills: { bg: '#DCFCE7', text: '#16A34A', icon: '#16A34A' },        // green
+  Shopping: { bg: '#F3E8FF', text: '#9333EA', icon: '#9333EA' },      // purple
+  Health: { bg: '#FEE2E2', text: '#DC2626', icon: '#DC2626' },       // red
+  Transfer: { bg: '#CFFAFE', text: '#0891B2', icon: '#0891B2' },     // cyan
+  Entertainment: { bg: '#FDF4FF', text: '#C026D3', icon: '#C026D3' }, // fuchsia
+  Others: { bg: '#F1F5F9', text: '#64748B', icon: '#64748B' },       // slate
 };

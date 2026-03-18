@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withSpring,
+  FadeInDown,
+  FadeInUp,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors } from '../theme';
+import { Colors, Elevation } from '../theme';
 import { initFirebase, signIn } from '../services/firebase';
 
 interface Props {
@@ -18,6 +29,22 @@ interface Props {
 export default function LoginScreen({ onLogin }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Floating mascot animation
+  const floatY = useSharedValue(0);
+  useEffect(() => {
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 1800 }),
+        withTiming(10, { duration: 1800 }),
+      ),
+      -1,
+      true,
+    );
+  }, []);
+  const mascotAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: floatY.value }],
+  }));
 
   const handleAnonymousLogin = async () => {
     setLoading(true);
@@ -47,20 +74,29 @@ export default function LoginScreen({ onLogin }: Props) {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
           {/* Logo Area */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>₹</Text>
-            </View>
+          <Animated.View style={styles.logoSection} entering={FadeInDown.duration(600).springify()}>
+            <Animated.View style={mascotAnimStyle}>
+              <Image
+                source={require('../../assets/mascot/mascot-greet.png')}
+                style={styles.mascotImage}
+              />
+            </Animated.View>
             <Text style={styles.appName}>Koin</Text>
             <Text style={styles.tagline}>Personal Finance Tracker</Text>
-          </View>
+          </Animated.View>
 
           {/* Features */}
           <View style={styles.features}>
-            <FeatureRow icon="flash-on" text="Track expenses in under 3 seconds" />
-            <FeatureRow icon="lightbulb" text="Smart suggestions that learn your habits" />
-            <FeatureRow icon="cloud-done" text="Sync across devices with cloud backup" />
-            <FeatureRow icon="fingerprint" text="Secure with Face ID / Biometrics" />
+            {[
+              { icon: 'flash-on', text: 'Track expenses in under 3 seconds' },
+              { icon: 'lightbulb', text: 'Smart suggestions that learn your habits' },
+              { icon: 'cloud-done', text: 'Sync across devices with cloud backup' },
+              { icon: 'fingerprint', text: 'Secure with Face ID / Biometrics' },
+            ].map((item, index) => (
+              <Animated.View key={item.icon} entering={FadeInDown.delay(200 + index * 80).springify().damping(18)}>
+                <FeatureRow icon={item.icon} text={item.text} />
+              </Animated.View>
+            ))}
           </View>
 
           {/* Actions */}
@@ -116,7 +152,7 @@ function FeatureRow({ icon, text }: { icon: string; text: string }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
   },
   safeArea: {
     flex: 1,
@@ -132,30 +168,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  logoCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(19, 127, 236, 0.12)',
-    borderWidth: 2,
-    borderColor: 'rgba(19, 127, 236, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  mascotImage: {
+    width: 140,
+    height: 140,
     marginBottom: 8,
   },
-  logoText: {
-    color: Colors.primary,
-    fontSize: 40,
-    fontWeight: '700',
-  },
   appName: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 36,
     fontWeight: '800',
     letterSpacing: -1,
   },
   tagline: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -171,12 +196,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
+    backgroundColor: Colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   featureText: {
-    color: Colors.slate300,
+    color: Colors.textSecondary,
     fontSize: 15,
     fontWeight: '500',
     flex: 1,
@@ -185,7 +210,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   errorText: {
-    color: '#ef4444',
+    color: Colors.expense,
     fontSize: 14,
     textAlign: 'center',
     fontWeight: '500',
@@ -198,11 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Elevation.elevationBrand,
   },
   primaryButtonText: {
     color: Colors.white,
@@ -215,15 +236,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(30, 41, 59, 0.8)',
+    borderColor: Colors.borderMedium,
   },
   secondaryButtonText: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 15,
     fontWeight: '600',
   },
   disclaimer: {
-    color: Colors.slate600,
+    color: Colors.textTertiary,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

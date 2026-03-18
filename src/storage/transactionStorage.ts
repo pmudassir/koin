@@ -1,10 +1,4 @@
-function generateId(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+import { v4 as uuidv4 } from "uuid";
 import { Transaction } from "../models/Transaction";
 import { getItem, setItem, STORAGE_KEYS } from "./mmkv";
 
@@ -18,12 +12,19 @@ export function addTransaction(
   const transactions = getTransactions();
   const newTxn: Transaction = {
     ...txn,
-    id: generateId(),
+    id: uuidv4(),
     timestamp: Date.now(),
     synced: false,
   };
   transactions.unshift(newTxn);
   setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
+
+  // Fire budget alert check (async, non-blocking)
+  if (txn.type !== 'income') {
+    import('../services/budgetAlerts').then((m) => m.checkBudgetAlerts()).catch(() => {});
+  }
+  // Update widgets
+  import('../services/widgetBridge').then((m) => m.updateWidgetData()).catch(() => {});
 
   return newTxn;
 }
@@ -39,6 +40,7 @@ export function updateTransaction(
   transactions[index] = { ...transactions[index], ...updates, synced: false };
   setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
 
+  import('../services/widgetBridge').then((m) => m.updateWidgetData()).catch(() => {});
   return transactions[index];
 }
 
@@ -47,6 +49,7 @@ export function deleteTransaction(id: string): boolean {
   const filtered = transactions.filter((t) => t.id !== id);
   if (filtered.length === transactions.length) return false;
   setItem(STORAGE_KEYS.TRANSACTIONS, filtered);
+  import('../services/widgetBridge').then((m) => m.updateWidgetData()).catch(() => {});
   return true;
 }
 
@@ -62,10 +65,9 @@ export function getTransactionsForDay(date: Date): Transaction[] {
 }
 
 export function getTodayTotal(): number {
-  return getTransactionsForDay(new Date()).reduce(
-    (sum, t) => sum + t.amount,
-    0,
-  );
+  return getTransactionsForDay(new Date())
+    .filter((t) => t.type !== 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
 }
 
 export function getWeeklyTotal(): number {
@@ -77,7 +79,7 @@ export function getWeeklyTotal(): number {
   monday.setHours(0, 0, 0, 0);
 
   return getTransactions()
-    .filter((t) => t.timestamp >= monday.getTime())
+    .filter((t) => t.type !== 'income' && t.timestamp >= monday.getTime())
     .reduce((sum, t) => sum + t.amount, 0);
 }
 
@@ -87,7 +89,7 @@ export function getMonthlyTotal(): number {
   monthStart.setHours(0, 0, 0, 0);
 
   return getTransactions()
-    .filter((t) => t.timestamp >= monthStart.getTime())
+    .filter((t) => t.type !== 'income' && t.timestamp >= monthStart.getTime())
     .reduce((sum, t) => sum + t.amount, 0);
 }
 
@@ -147,11 +149,11 @@ export function setDailyBudget(budget: number): void {
 export type BudgetPeriod = "daily" | "weekly" | "monthly";
 
 export function getBudgetPeriod(): BudgetPeriod {
-  return getItem<BudgetPeriod>("budget_period") || "daily";
+  return getItem<BudgetPeriod>(STORAGE_KEYS.BUDGET_PERIOD) || "daily";
 }
 
 export function setBudgetPeriod(period: BudgetPeriod): void {
-  setItem("budget_period", period);
+  setItem(STORAGE_KEYS.BUDGET_PERIOD, period);
 }
 
 export function markTransactionsSynced(ids: string[]): void {
@@ -185,4 +187,88 @@ export function getTransactionsForDateRange(
     (t) =>
       t.timestamp >= startDate.getTime() && t.timestamp <= endDate.getTime(),
   );
+}
+
+export interface SearchFilters {
+  categories?: string[];
+  startDate?: Date;
+  endDate?: Date;
+  minAmount?: number;
+  maxAmount?: number;
+}
+
+export function searchTransactions(
+  query: string,
+  filters?: SearchFilters,
+): Transaction[] {
+  let results = getTransactions();
+
+  // Text search: match merchant, note, or category
+  if (query.trim()) {
+    const q = query.trim().toLowerCase();
+    results = results.filter(
+      (t) =>
+        t.merchant.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q) ||
+        (t.note && t.note.toLowerCase().includes(q)),
+    );
+  }
+
+  // Category filter
+  if (filters?.categories && filters.categories.length > 0) {
+    const cats = new Set(filters.categories.map((c) => c.toLowerCase()));
+    results = results.filter((t) => cats.has(t.category.toLowerCase()));
+  }
+
+  // Date range filter
+  if (filters?.startDate) {
+    const start = filters.startDate.getTime();
+    results = results.filter((t) => t.timestamp >= start);
+  }
+  if (filters?.endDate) {
+    const end = filters.endDate.getTime();
+    results = results.filter((t) => t.timestamp <= end);
+  }
+
+  // Amount range filter
+  if (filters?.minAmount !== undefined) {
+    results = results.filter((t) => t.amount >= filters.minAmount!);
+  }
+  if (filters?.maxAmount !== undefined) {
+    results = results.filter((t) => t.amount <= filters.maxAmount!);
+  }
+
+  return results;
+}
+
+/** Helper to check if a transaction is an expense (backward compatible) */
+function isExpense(t: Transaction): boolean {
+  return t.type !== 'income';
+}
+
+/** Get today's income */
+export function getTodayIncome(): number {
+  return getTransactionsForDay(new Date())
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+/** Get monthly income */
+export function getMonthlyIncome(): number {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  return getTransactions()
+    .filter((t) => t.type === 'income' && t.timestamp >= monthStart.getTime())
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+/** Get net balance (income - expenses) for a date range */
+export function getNetBalance(startDate: Date, endDate: Date): number {
+  const txns = getTransactionsForDateRange(startDate, endDate);
+  return txns.reduce((sum, t) => {
+    if (t.type === 'income') return sum + t.amount;
+    return sum - t.amount;
+  }, 0);
 }

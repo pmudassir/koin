@@ -8,6 +8,20 @@ export interface CustomCategory {
 
 const CUSTOM_CATEGORIES_KEY = 'custom_categories';
 
+// Listeners notified when custom categories change (for cache invalidation)
+type ChangeListener = () => void;
+const _changeListeners: ChangeListener[] = [];
+export function onCustomCategoriesChange(listener: ChangeListener): () => void {
+  _changeListeners.push(listener);
+  return () => {
+    const idx = _changeListeners.indexOf(listener);
+    if (idx >= 0) _changeListeners.splice(idx, 1);
+  };
+}
+function notifyChange(): void {
+  _changeListeners.forEach((fn) => fn());
+}
+
 export function getCustomCategories(): CustomCategory[] {
   return getItem<CustomCategory[]>(CUSTOM_CATEGORIES_KEY) || [];
 }
@@ -17,8 +31,9 @@ export function addCustomCategory(category: CustomCategory): void {
   if (categories.some(c => c.name.toLowerCase() === category.name.toLowerCase())) {
     return; // Already exists
   }
-  categories.push(category);
-  setItem(CUSTOM_CATEGORIES_KEY, categories);
+  const updated = [...categories, category];
+  setItem(CUSTOM_CATEGORIES_KEY, updated);
+  notifyChange();
 }
 
 export function removeCustomCategory(name: string): void {
@@ -27,6 +42,7 @@ export function removeCustomCategory(name: string): void {
     CUSTOM_CATEGORIES_KEY,
     categories.filter(c => c.name !== name)
   );
+  notifyChange();
 }
 
 // Available icons for custom categories

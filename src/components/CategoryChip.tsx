@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '../theme';
+import { Colors, Elevation } from '../theme';
 import { Category } from '../models/Transaction';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onPress: () => void;
 }
 
-export default function CategoryChip({ category, isActive, onPress }: Props) {
+function CategoryChip({ category, isActive, onPress }: Props) {
   return (
     <TouchableOpacity
       style={[
@@ -22,10 +22,10 @@ export default function CategoryChip({ category, isActive, onPress }: Props) {
       <Text
         style={[
           styles.text,
-          { color: isActive ? Colors.white : Colors.slate400 },
+          { color: isActive ? Colors.textOnPrimary : Colors.textSecondary },
         ]}
       >
-        {category.toUpperCase()}
+        {category}
       </Text>
     </TouchableOpacity>
   );
@@ -41,15 +41,17 @@ const styles = StyleSheet.create({
   active: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+    ...Elevation.elevation1,
   },
   inactive: {
-    backgroundColor: 'transparent',
-    borderColor: Colors.slate700,
+    backgroundColor: Colors.surface,
+    borderColor: Colors.borderMedium,
   },
   text: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    textTransform: 'uppercase',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
 });
+
+export default React.memo(CategoryChip);

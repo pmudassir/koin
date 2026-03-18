@@ -7,12 +7,19 @@ import {
   Platform,
   AppState,
   AppStateStatus,
+  Image,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { Colors } from '../theme';
 import { isBiometricsEnabled, isBiometricsAvailable, authenticateWithBiometrics } from '../services/security';
 import { ToastProvider, ConfirmDialog } from '../components/Toast';
@@ -24,9 +31,14 @@ import SettingsScreen from '../screens/SettingsScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import AllTransactionsScreen from '../screens/AllTransactionsScreen';
 import PendingScreen from '../screens/PendingScreen';
+import MerchantDetailScreen from '../screens/MerchantDetailScreen';
 
 import LoginScreen from '../screens/LoginScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import { getItem, setItem, STORAGE_KEYS } from '../storage/mmkv';
+import { processRecurringTransactions } from '../services/recurringProcessor';
+import { setupNotifications } from '../services/notificationService';
+import { initWidgets } from '../services/widgetBridge';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -51,9 +63,10 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <View style={lockStyles.container}>
-      <View style={lockStyles.iconWrapper}>
-        <MaterialIcons name="lock" size={48} color={Colors.primary} />
-      </View>
+      <Image
+        source={require('../../assets/mascot/mascot-idle.png')}
+        style={lockStyles.mascotImage}
+      />
       <Text style={lockStyles.title}>Koin is Locked</Text>
       <Text style={lockStyles.subtitle}>Authenticate to continue</Text>
       {error && (
@@ -70,27 +83,23 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
 const lockStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.backgroundDark,
+    backgroundColor: Colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
   },
-  iconWrapper: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(19, 127, 236, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  mascotImage: {
+    width: 120,
+    height: 120,
     marginBottom: 12,
   },
   title: {
-    color: Colors.slate100,
+    color: Colors.textPrimary,
     fontSize: 24,
     fontWeight: '700',
   },
   subtitle: {
-    color: Colors.slate400,
+    color: Colors.textSecondary,
     fontSize: 15,
   },
   error: {
@@ -118,13 +127,42 @@ const lockStyles = StyleSheet.create({
 
 // ─── Tab Bar ──────────────────────────────────
 function CustomTabBarButton({ children, onPress }: any) {
+  const scale = useSharedValue(1);
+  const rotation = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { rotate: `${rotation.value}deg` },
+    ],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.88, { damping: 15, stiffness: 300 });
+    rotation.value = withSpring(45, { damping: 15, stiffness: 300 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 200 });
+    rotation.value = withSpring(0, { damping: 12, stiffness: 200 });
+  };
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onPress?.();
+  };
+
   return (
     <TouchableOpacity
       style={styles.fabTab}
-      activeOpacity={0.8}
-      onPress={onPress}
+      activeOpacity={1}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
     >
-      <View style={styles.fabTabInner}>{children}</View>
+      <Animated.View style={[styles.fabTabInner, animatedStyle]}>
+        {children}
+      </Animated.View>
     </TouchableOpacity>
   );
 }
@@ -144,7 +182,7 @@ function TabNavigator() {
           paddingBottom: bottomPadding,
         },
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.slate500,
+        tabBarInactiveTintColor: Colors.textTertiary,
         tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
@@ -207,6 +245,9 @@ function TabNavigator() {
 
 // ─── Main Navigator ──────────────────────────────────
 export default function AppNavigator() {
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(() => {
+    return getItem<boolean>(STORAGE_KEYS.HAS_SEEN_ONBOARDING) === true;
+  });
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return getItem<boolean>(STORAGE_KEYS.HAS_ONBOARDED) === true;
   });
@@ -234,6 +275,12 @@ export default function AppNavigator() {
         }
       }
       setInitialCheckDone(true);
+      // Process recurring transactions on startup
+      processRecurringTransactions();
+      // Setup push notifications
+      setupNotifications();
+      // Initialize widgets
+      initWidgets();
     };
     checkLock();
 
@@ -242,10 +289,15 @@ export default function AppNavigator() {
       const isNowActive = nextAppState === 'active';
       const cooldownPassed = Date.now() - lastUnlockTime.current > 3000;
 
-      if (wasBackground && isNowActive && isBiometricsEnabled() && cooldownPassed) {
-        const available = await isBiometricsAvailable();
-        if (available) {
-          setIsLocked(true);
+      if (wasBackground && isNowActive) {
+        // Process recurring transactions on foreground
+        processRecurringTransactions();
+
+        if (isBiometricsEnabled() && cooldownPassed) {
+          const available = await isBiometricsAvailable();
+          if (available) {
+            setIsLocked(true);
+          }
         }
       }
       appState.current = nextAppState;
@@ -255,6 +307,18 @@ export default function AppNavigator() {
   }, [isLoggedIn]);
 
   if (!initialCheckDone) return null;
+
+  // Show onboarding on first ever launch
+  if (!hasSeenOnboarding) {
+    return (
+      <OnboardingScreen
+        onDone={() => {
+          setItem(STORAGE_KEYS.HAS_SEEN_ONBOARDING, true);
+          setHasSeenOnboarding(true);
+        }}
+      />
+    );
+  }
 
   // Show login screen if not onboarded
   if (!isLoggedIn) {
@@ -270,6 +334,7 @@ export default function AppNavigator() {
     prefixes: ['koin://'],
     config: {
       screens: {
+        AddExpense: 'add',
         MainTabs: 'main',
       },
     },
@@ -282,7 +347,7 @@ export default function AppNavigator() {
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_bottom',
-            contentStyle: { backgroundColor: Colors.backgroundDark },
+            contentStyle: { backgroundColor: Colors.canvas },
           }}
         >
           <Stack.Screen name="MainTabs" component={TabNavigator} />
@@ -309,6 +374,13 @@ export default function AppNavigator() {
               animation: 'slide_from_bottom',
             }}
           />
+          <Stack.Screen
+            name="MerchantDetail"
+            component={MerchantDetailScreen}
+            options={{
+              animation: 'slide_from_right',
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
       <ConfirmDialog />
@@ -318,8 +390,8 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: 'rgba(16, 25, 34, 0.95)',
-    borderTopColor: 'rgba(30, 41, 59, 0.8)',
+    backgroundColor: Colors.surface,
+    borderTopColor: Colors.borderSubtle,
     borderTopWidth: 1,
     paddingTop: 8,
     elevation: 0,
